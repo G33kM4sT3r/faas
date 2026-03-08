@@ -25,7 +25,7 @@ Available for Linux and macOS (amd64/arm64).
 **Build from source** (requires Go 1.26+):
 
 ```bash
-git clone https://github.com/G33kM4sT3r/faas.git
+git clone git@github.com:G33kM4sT3r/faas.git
 cd faas && make build
 ```
 
@@ -72,81 +72,21 @@ Each function implements a `handler` that receives a JSON body and returns a JSO
 ## Commands
 
 ```
-faas up [func]          Build and deploy a function as an HTTP service
-faas down [name]        Stop and remove a running function
-faas ls                 List deployed functions
-faas logs [name]        Stream function logs
-faas init [func]        Generate a config.toml for a function
+faas up <file|dir>     Build and deploy a function as an HTTP service
+faas down [name]       Stop and remove a running function
+faas ls                List deployed functions
+faas logs <name>       Stream function logs
+faas init <file>       Generate a config.toml for a function
 ```
-
-### Deploy
 
 ```bash
-faas up hello.py                               # Auto-detect language, auto-assign port
-faas up hello.py --name my-func --port 3000    # Explicit name and port
-faas up hello.py --env API_KEY=secret          # Pass environment variables
-faas up hello.py --no-cache                    # Force rebuild
+faas up hello.py --name my-func --port 3000 --env API_KEY=secret
+faas down my-func                    # or: faas down --all
+faas ls --json                       # table, JSON, or --quiet
+faas logs my-func --level error      # filter + follow by default
 ```
 
-### Manage
-
-```bash
-faas ls                 # Table view of all functions
-faas ls --json          # Machine-readable output
-faas ls --quiet         # Names only
-
-faas logs my-func       # Last 50 lines
-faas logs my-func -f    # Follow (stream)
-faas logs my-func --level error --json
-
-faas down my-func       # Stop one function
-faas down --all         # Stop everything
-```
-
-## Configuration
-
-Auto-generated on first deploy. Override by creating `config.toml` alongside your function:
-
-```toml
-[function]
-name = "hello"
-language = "python"
-entrypoint = "hello.py"
-
-[runtime]
-port = 3000             # 0 = auto-assign (default)
-health_path = "/health"
-
-[build]
-base_image = ""         # Override default base image
-runtime_image = ""      # Override default runtime image
-
-[env]
-API_KEY = "secret"
-
-[dependencies]
-packages = []
-```
-
-### Dependencies
-
-Declare external packages in `config.toml` using `package@version` format (version is optional — omit for latest):
-
-```toml
-[dependencies]
-packages = ["requests@2.31.0", "flask"]
-```
-
-Dependencies are installed during the Docker build. When no packages are declared, the container image stays minimal — no package manager overhead.
-
-| Language | Package Format | Example |
-|----------|---------------|---------|
-| Python | PyPI package name | `requests@2.31.0` |
-| Go | Full module path | `github.com/fatih/color@v1.18.0` |
-| Rust | Crate name | `serde@1.0` |
-| PHP | Composer package | `guzzlehttp/guzzle@^7.0` |
-| JavaScript | npm package | `lodash@4.17.21` |
-| TypeScript | npm package | `@types/node@22.0.0` |
+See [docs/cli-reference.md](docs/cli-reference.md) for the full CLI reference with all flags, configuration options, and dependency management.
 
 ## Architecture
 

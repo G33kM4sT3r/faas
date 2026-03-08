@@ -7,18 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-03-08
+
+Initial release — deploy functions as containerized HTTP services with a single command.
+
 ### Added
 
-- CLI commands: `up`, `down`, `ls`, `logs`, `init`
-- Language support: Go, Python, Rust, PHP, TypeScript, JavaScript (Bun)
-- Docker container runtime with pluggable interface
-- Auto-generated `config.toml` per function
-- Auto-assigned ports via OS ephemeral range
-- Explicit port assignment with conflict detection
-- Custom template override via `~/.faas/templates/`
-- Structured JSON logging with level filtering
-- Health check polling before reporting readiness
-- TUI spinner and styled output (bubbletea + lipgloss)
-- E2E tests for all supported languages
-- CI workflow with lint, vet, race-detected tests, coverage threshold, and security checks
-- Release workflow with cross-compiled binaries for Linux and macOS (amd64/arm64)
+- Deploy functions in Go, Python, Rust, PHP, TypeScript, and JavaScript
+- Five CLI commands: `up`, `down`, `ls`, `logs`, `init`
+- Auto-detect language from file extension — no config needed to get started
+- Auto-generated `config.toml` with optional port, environment variables, and dependencies
+- External package support for all languages via `package@version` syntax in config
+- Auto-assigned ports with optional explicit port binding
+- Health check polling — functions are ready when `up` returns
+- Structured JSON log streaming with level filtering
+- Custom template system — override built-in templates or add new languages via `~/.faas/templates/`
+- JSON and quiet output modes for scripting (`ls --json`, `ls --quiet`, `logs --json`)
+- Force redeploy (`up --force`) and cache-busting rebuilds (`up --no-cache`)
+- Bulk teardown (`down --all`)
+- Cross-platform release binaries for Linux and macOS (amd64/arm64)

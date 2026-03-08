@@ -5,7 +5,7 @@ Thanks for your interest in contributing to FaaS. This document covers the workf
 ## Getting Started
 
 ```bash
-git clone https://github.com/G33kM4sT3r/faas.git
+git clone git@github.com:G33kM4sT3r/faas.git
 cd faas && make build
 ```
 

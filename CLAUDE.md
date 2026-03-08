@@ -191,7 +191,7 @@ After refactoring: search for old function names, `make check` catches unused im
 
 - Always use SSH remotes (`git@github.com:...`), not HTTPS
 - Use `gh` CLI for GitHub operations (releases, PRs, issues)
-- CHANGELOG.md follows [Keep a Changelog](https://keepachangelog.com/) format
+- CHANGELOG.md follows [Keep a Changelog](https://keepachangelog.com/) format — entries must be **user-facing** (what users can do), not technical internals
 
 ## GitHub Workflows
 
