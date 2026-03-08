@@ -51,13 +51,12 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           COMMIT=$(git rev-parse --short HEAD)
           LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}"
-          BINARY="faas-${VERSION}-${GOOS}-${GOARCH}"
+          BINARY="faas-${GITHUB_REF_NAME}-${GOOS}-${GOARCH}"
           CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o "${BINARY}" ./cmd/faas/
 
       - name: Create archive
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          BINARY="faas-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          BINARY="faas-${GITHUB_REF_NAME}-${{ matrix.goos }}-${{ matrix.goarch }}"
           tar czf "${BINARY}.tar.gz" "${BINARY}" LICENSE README.md
 
       - name: Upload artifact
@@ -106,10 +105,10 @@ jobs:
 
             | Platform | Archive |
             |----------|---------|
-            | Linux (x86_64) | `faas-<version>-linux-amd64.tar.gz` |
-            | Linux (ARM64) | `faas-<version>-linux-arm64.tar.gz` |
-            | macOS (Intel) | `faas-<version>-darwin-amd64.tar.gz` |
-            | macOS (Apple Silicon) | `faas-<version>-darwin-arm64.tar.gz` |
+            | Linux (x86_64) | `faas-${{ github.ref_name }}-linux-amd64.tar.gz` |
+            | Linux (ARM64) | `faas-${{ github.ref_name }}-linux-arm64.tar.gz` |
+            | macOS (Intel) | `faas-${{ github.ref_name }}-darwin-amd64.tar.gz` |
+            | macOS (Apple Silicon) | `faas-${{ github.ref_name }}-darwin-arm64.tar.gz` |
 
             Verify integrity with `checksums.txt`.
 
