@@ -31,6 +31,7 @@ type RenderData struct {
 	BaseImage       string
 	RuntimeImage    string
 	HasDependencies bool
+	Dependencies    []string
 }
 
 // Engine handles template discovery and rendering.

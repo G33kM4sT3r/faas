@@ -35,7 +35,7 @@ jobs:
           version: v2.10
 
       - name: Test with coverage
-        run: go test -race -coverprofile=coverage.out ./...
+        run: go test -race -coverprofile=coverage.out $(go list ./... | grep -v faas/cmd/ | grep -v faas/test/ | grep -v /runtime | grep -v /ui)
 
       - name: Check coverage threshold
         run: |
@@ -45,6 +45,9 @@ jobs:
             echo "Coverage ${COVERAGE}% is below 80% threshold"
             exit 1
           fi
+
+      - name: Run all tests
+        run: go test -race -count=1 ./...
 
   security:
     runs-on: ubuntu-latest

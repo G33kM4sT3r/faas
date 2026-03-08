@@ -1,0 +1,17 @@
+[function]
+name = "deps-php"
+language = "php"
+entrypoint = "hello_deps.php"
+
+[dependencies]
+packages = ["cocur/slugify"]
+
+[env]
+
+[runtime]
+port = 0
+health_path = "/health"
+
+[build]
+base_image = ""
+runtime_image = ""

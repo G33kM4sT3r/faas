@@ -152,6 +152,26 @@ API_KEY = "secret"
 packages = []
 ```
 
+### Dependencies
+
+Declare external packages in `config.toml` using `package@version` format (version is optional — omit for latest):
+
+```toml
+[dependencies]
+packages = ["requests@2.31.0", "flask"]
+```
+
+Dependencies are installed during the Docker build. When no packages are declared, the container image stays minimal — no package manager overhead.
+
+| Language | Package Format | Example |
+|----------|---------------|---------|
+| Python | PyPI package name | `requests@2.31.0` |
+| Go | Full module path | `github.com/fatih/color@v1.18.0` |
+| Rust | Crate name | `serde@1.0` |
+| PHP | Composer package | `guzzlehttp/guzzle@^7.0` |
+| JavaScript | npm package | `lodash@4.17.21` |
+| TypeScript | npm package | `@types/node@22.0.0` |
+
 ## Architecture
 
 Single binary CLI built on [Cobra](https://github.com/spf13/cobra). Dependencies flow inward — lower layers never import higher layers.

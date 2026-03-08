@@ -1,7 +1,8 @@
 FROM {{.BaseImage}} AS builder
 WORKDIR /app
-COPY Cargo.toml Cargo.lock ./
-COPY src/ src/
+COPY Cargo.toml ./
+RUN mkdir -p src
+COPY main.rs src/main.rs
 RUN cargo build --release
 
 FROM {{.RuntimeImage}}

@@ -64,6 +64,68 @@ func TestLanguageLifecycle(t *testing.T) {
 	}
 }
 
+func TestDependencyLifecycle(t *testing.T) {
+	if exec.Command("docker", "info").Run() != nil {
+		t.Skip("docker not available")
+	}
+
+	binPath := buildBinary(t)
+
+	tests := []struct {
+		lang      string
+		file      string
+		config    string
+		expected  string
+		slugField string
+	}{
+		{"python", "hello_deps.py", "config_python.toml", "Hello, Claude!", "slug"},
+		{"go", "hello_deps.go", "config_go.toml", "Hello, Claude!", "slug"},
+		{"rust", "hello_deps.rs", "config_rust.toml", "Hello, Claude!", "slug"},
+		{"php", "hello_deps.php", "config_php.toml", "Hello, Claude!", "slug"},
+		{"javascript", "hello_deps.js", "config_javascript.toml", "Hello, Claude!", "slug"},
+		{"typescript", "hello_deps.ts", "config_typescript.toml", "Hello, Claude!", "slug"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.lang, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			srcFunc := filepath.Join("testdata", "deps", tt.file)
+			srcConfig := filepath.Join("testdata", "deps", tt.config)
+			dstFunc := filepath.Join(tmpDir, tt.file)
+			dstConfig := filepath.Join(tmpDir, "config.toml")
+
+			funcData, err := os.ReadFile(srcFunc)
+			if err != nil {
+				t.Fatalf("reading fixture %s: %v", srcFunc, err)
+			}
+			if err := os.WriteFile(dstFunc, funcData, 0o644); err != nil {
+				t.Fatalf("writing %s: %v", dstFunc, err)
+			}
+			configData, err := os.ReadFile(srcConfig)
+			if err != nil {
+				t.Fatalf("reading fixture %s: %v", srcConfig, err)
+			}
+			if err := os.WriteFile(dstConfig, configData, 0o644); err != nil {
+				t.Fatalf("writing %s: %v", dstConfig, err)
+			}
+
+			name := fmt.Sprintf("e2e-deps-%s", tt.lang)
+
+			port := faasUp(t, binPath, dstFunc, name)
+			defer faasDown(t, binPath, name)
+
+			url := "http://localhost:" + port
+			result := postJSON(t, url, `{"name":"Claude"}`)
+			if result["message"] != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result["message"])
+			}
+			if result[tt.slugField] == "" {
+				t.Errorf("expected non-empty %s field (proves dependency was installed)", tt.slugField)
+			}
+		})
+	}
+}
+
 func stripANSI(s string) string {
 	return ansiRe.ReplaceAllString(s, "")
 }

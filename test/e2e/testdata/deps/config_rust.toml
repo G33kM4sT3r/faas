@@ -1,0 +1,17 @@
+[function]
+name = "deps-rust"
+language = "rust"
+entrypoint = "hello_deps.rs"
+
+[dependencies]
+packages = ["slug@0.1"]
+
+[env]
+
+[runtime]
+port = 0
+health_path = "/health"
+
+[build]
+base_image = ""
+runtime_image = ""

@@ -74,6 +74,7 @@ func PrepareBuildContext(funcDir string, cfg *config.Config, customTemplateDir s
 		BaseImage:       baseImage,
 		RuntimeImage:    runtimeImage,
 		HasDependencies: hasDeps,
+		Dependencies:    cfg.Dependencies.Packages,
 	}
 
 	wrapper, err := engine.RenderWrapper(cfg.Function.Language, data)
@@ -100,10 +101,22 @@ func PrepareBuildContext(funcDir string, cfg *config.Config, customTemplateDir s
 		return BuildContext{}, fmt.Errorf("writing wrapper: %w", err)
 	}
 
-	if hasDeps {
-		if err := writeDependencyFile(buildDir, cfg.Function.Language, cfg.Dependencies.Packages); err != nil {
-			return BuildContext{}, fmt.Errorf("writing dependencies: %w", err)
+	// Go and PHP use separate handler files — user function is not embedded in template.
+	// Go: handler.go (avoids duplicate package declarations and misplaced imports)
+	// PHP: handler.php (avoids duplicate <?php opening tags)
+	switch cfg.Function.Language {
+	case "go":
+		if err := os.WriteFile(filepath.Join(buildDir, "handler.go"), funcContent, 0o644); err != nil {
+			return BuildContext{}, fmt.Errorf("writing handler.go: %w", err)
 		}
+	case "php":
+		if err := os.WriteFile(filepath.Join(buildDir, "handler.php"), funcContent, 0o644); err != nil {
+			return BuildContext{}, fmt.Errorf("writing handler.php: %w", err)
+		}
+	}
+
+	if err := writeLanguageFiles(buildDir, cfg.Function.Language, cfg.Dependencies.Packages); err != nil {
+		return BuildContext{}, fmt.Errorf("writing language files: %w", err)
 	}
 
 	return BuildContext{
@@ -124,28 +137,113 @@ func wrapperOutputName(language string) string {
 	return names[language]
 }
 
-func writeDependencyFile(buildDir, language string, packages []string) error {
+// writeLanguageFiles generates language-specific manifest and dependency files.
+// For Go/Rust: always generates manifest (go.mod/Cargo.toml) since they are required for builds.
+// For Python/JS/TS/PHP: only generates when packages are non-empty.
+func writeLanguageFiles(buildDir, language string, packages []string) error {
 	switch language {
 	case "python":
-		content := strings.Join(packages, "\n") + "\n"
-		return os.WriteFile(filepath.Join(buildDir, "requirements.txt"), []byte(content), 0o644)
+		if len(packages) == 0 {
+			return nil
+		}
+		return writePythonRequirements(buildDir, packages)
 	case "go":
-		return nil
+		return writeGoMod(buildDir, packages)
 	case "rust":
-		return nil
+		return writeCargoToml(buildDir, packages)
 	case "php":
-		return nil
-	case "typescript", "javascript":
-		pkgJSON := fmt.Sprintf(`{"dependencies":{%s}}`, formatBunDeps(packages))
-		return os.WriteFile(filepath.Join(buildDir, "package.json"), []byte(pkgJSON), 0o644)
+		if len(packages) == 0 {
+			return nil
+		}
+		return writeComposerJSON(buildDir, packages)
+	case "javascript", "typescript":
+		if len(packages) == 0 {
+			return nil
+		}
+		return writeBunPackageJSON(buildDir, packages)
 	}
 	return nil
+}
+
+func writePythonRequirements(buildDir string, packages []string) error {
+	lines := make([]string, 0, len(packages))
+	for _, pkg := range packages {
+		name, version := parsePackageVersion(pkg)
+		if version != "" {
+			lines = append(lines, name+"=="+version)
+		} else {
+			lines = append(lines, name)
+		}
+	}
+	content := strings.Join(lines, "\n") + "\n"
+	return os.WriteFile(filepath.Join(buildDir, "requirements.txt"), []byte(content), 0o644)
+}
+
+func writeGoMod(buildDir string, _ []string) error {
+	var b strings.Builder
+	b.WriteString("module faas-func\n\ngo 1.26\n")
+	return os.WriteFile(filepath.Join(buildDir, "go.mod"), []byte(b.String()), 0o644)
+}
+
+func writeCargoToml(buildDir string, packages []string) error {
+	var b strings.Builder
+	b.WriteString("[package]\nname = \"faas-func\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n")
+	b.WriteString("[[bin]]\nname = \"server\"\npath = \"src/main.rs\"\n\n")
+	b.WriteString("[dependencies]\nserde_json = \"1\"\n")
+
+	for _, pkg := range packages {
+		name, version := parsePackageVersion(pkg)
+		if version == "" {
+			version = "*"
+		}
+		fmt.Fprintf(&b, "%s = %q\n", name, version)
+	}
+	return os.WriteFile(filepath.Join(buildDir, "Cargo.toml"), []byte(b.String()), 0o644)
+}
+
+func writeComposerJSON(buildDir string, packages []string) error {
+	deps := make([]string, 0, len(packages))
+	for _, pkg := range packages {
+		name, version := parsePackageVersion(pkg)
+		if version == "" {
+			version = "*"
+		}
+		deps = append(deps, fmt.Sprintf("%q:%q", name, version))
+	}
+	content := fmt.Sprintf(`{"require":{%s}}`, strings.Join(deps, ","))
+	return os.WriteFile(filepath.Join(buildDir, "composer.json"), []byte(content), 0o644)
+}
+
+func writeBunPackageJSON(buildDir string, packages []string) error {
+	pkgJSON := fmt.Sprintf(`{"dependencies":{%s}}`, formatBunDeps(packages))
+	return os.WriteFile(filepath.Join(buildDir, "package.json"), []byte(pkgJSON), 0o644)
+}
+
+// parsePackageVersion splits "pkg@version" into (pkg, version).
+// Handles scoped npm packages like "@types/node@22.0.0".
+// Returns empty version string if no version specified.
+func parsePackageVersion(pkg string) (name, version string) {
+	if strings.HasPrefix(pkg, "@") {
+		// Scoped npm: @scope/name@version — find @ after the scope
+		if idx := strings.Index(pkg[1:], "@"); idx >= 0 {
+			return pkg[:idx+1], pkg[idx+2:]
+		}
+		return pkg, ""
+	}
+	if idx := strings.LastIndex(pkg, "@"); idx > 0 {
+		return pkg[:idx], pkg[idx+1:]
+	}
+	return pkg, ""
 }
 
 func formatBunDeps(packages []string) string {
 	deps := make([]string, 0, len(packages))
 	for _, pkg := range packages {
-		deps = append(deps, fmt.Sprintf("%q:\"*\"", pkg))
+		name, version := parsePackageVersion(pkg)
+		if version == "" {
+			version = "*"
+		}
+		deps = append(deps, fmt.Sprintf("%q:%q", name, version))
 	}
 	return strings.Join(deps, ",")
 }

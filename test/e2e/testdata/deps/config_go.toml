@@ -1,0 +1,17 @@
+[function]
+name = "deps-go"
+language = "go"
+entrypoint = "hello_deps.go"
+
+[dependencies]
+packages = ["github.com/gosimple/slug"]
+
+[env]
+
+[runtime]
+port = 0
+health_path = "/health"
+
+[build]
+base_image = ""
+runtime_image = ""

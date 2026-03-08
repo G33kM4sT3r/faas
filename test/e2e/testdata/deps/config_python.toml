@@ -1,0 +1,17 @@
+[function]
+name = "deps-python"
+language = "python"
+entrypoint = "hello_deps.py"
+
+[dependencies]
+packages = ["python-slugify@8.0.4"]
+
+[env]
+
+[runtime]
+port = 0
+health_path = "/health"
+
+[build]
+base_image = ""
+runtime_image = ""

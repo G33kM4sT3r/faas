@@ -1,6 +1,6 @@
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 // --- user function ---
 {{.UserFunction}}
@@ -8,7 +8,7 @@ use serde_json::Value;
 
 fn main() {
     let listener = TcpListener::bind(format!("0.0.0.0:{}", {{.Port}})).unwrap();
-    println!("{{\"level\":\"info\",\"msg\":\"listening\",\"port\":{}}}",  {{.Port}});
+    println!("{}", json!({{"{"}} "level": "info", "msg": "listening", "port": {{.Port}} {{"}"}}));
 
     for stream in listener.incoming() {
         let mut stream = stream.unwrap();

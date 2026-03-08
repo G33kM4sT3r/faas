@@ -1,0 +1,17 @@
+[function]
+name = "deps-typescript"
+language = "typescript"
+entrypoint = "hello_deps.ts"
+
+[dependencies]
+packages = ["slugify@1.6.6"]
+
+[env]
+
+[runtime]
+port = 0
+health_path = "/health"
+
+[build]
+base_image = ""
+runtime_image = ""

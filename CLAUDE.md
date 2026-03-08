@@ -9,6 +9,7 @@ make build                    # Production binary
 make test                     # Tests with race detection
 make test-coverage            # Coverage report
 make check                    # fmt-check + vet + lint + compile audit
+make help                     # Show all targets with descriptions
 ```
 
 ```bash
@@ -139,7 +140,24 @@ templates/<language>/
 └── template.toml         # Metadata: name, extensions, port, health path, base image
 ```
 
-User function is embedded directly into the rendered wrapper via string interpolation. Custom templates at `~/.faas/templates/<language>/` override built-in ones.
+Two embedding strategies based on language constraints:
+- **Inline embedding** (Python, Rust, JS, TS): `{{.UserFunction}}` in template — works because these allow imports anywhere at module level
+- **Separate handler file** (Go, PHP): Builder writes `handler.go`/`handler.php`, template uses native include (`Handler()` call / `require_once`). Required because Go's `package`+`import` and PHP's `<?php`+`use` break with inline embedding.
+
+Custom templates at `~/.faas/templates/<language>/` override built-in ones.
+
+### Dependency Support
+
+- Universal `@` version separator in config.toml: `"requests@2.32"`, `"cocur/slugify@4.6"`
+- `parsePackageVersion()` in builder translates to native format per language (`==` for pip, `"ver"` for npm/Cargo/Composer)
+- `writeLanguageFiles()` dispatches to per-language manifest generators (requirements.txt, go.mod, Cargo.toml, composer.json, package.json)
+- Go/Rust: manifests always generated (required for builds). Python/JS/TS/PHP: only when packages non-empty.
+- PHP Dockerfile installs extensions (intl, zip, bcmath, sockets, pcntl, pdo_mysql, pdo_pgsql, gd) — many others already built into `php:8.5-cli-alpine`
+
+## Template Gotchas
+
+- **PHP extensions**: `php:8.5-cli-alpine` has mbstring, curl, dom, PDO, pdo_sqlite, opcache, xml, fileinfo built-in. Never re-install them via `docker-php-ext-install` (causes `cp: can't stat 'modules/*'`). `gd` requires `docker-php-ext-configure gd --with-freetype --with-jpeg` before install.
+- **Adding new languages**: If the language has strict file-level declarations (like Go's `package`/`import` or PHP's `<?php`/`use`), use the separate handler file pattern — never inline embed.
 
 ## Port Management
 
@@ -165,3 +183,16 @@ User function is embedded directly into the rendered wrapper via string interpol
 ## Dead Code Removal
 
 After refactoring: search for old function names, `make check` catches unused imports, verify no references in tests.
+
+## Git & GitHub
+
+- Always use SSH remotes (`git@github.com:...`), not HTTPS
+- Use `gh` CLI for GitHub operations (releases, PRs, issues)
+- CHANGELOG.md follows [Keep a Changelog](https://keepachangelog.com/) format
+
+## GitHub Workflows
+
+- `.github/workflows/ci.yml` — push/PR to main: fmt-check, vet, lint, test with coverage threshold, govulncheck
+- `.github/workflows/release.yml` — on `v*` tag: test → cross-compile (linux/darwin × amd64/arm64) → GitHub Release with checksums
+- Release archives use full tag in filename: `faas-v1.0.0-linux-amd64.tar.gz`
+- Action versions: checkout@v6, setup-go@v6, upload-artifact@v7, download-artifact@v8, golangci-lint-action@v9, action-gh-release@v2
