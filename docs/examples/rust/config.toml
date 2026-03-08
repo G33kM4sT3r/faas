@@ -1,0 +1,21 @@
+[function]
+name = "hello-rust"
+language = "rust"
+entrypoint = "handler.rs"
+
+[runtime]
+port = 0                  # Auto-assign
+health_path = "/health"
+
+[build]
+base_image = ""           # Default: rust:1.94-alpine3.23
+runtime_image = ""        # Default: alpine:3.23
+
+[env]
+# MY_VAR = "value"
+
+[dependencies]
+packages = []
+# Example with dependencies:
+# packages = ["serde@1.0", "tokio@1.0"]
+# Note: serde_json is always included automatically

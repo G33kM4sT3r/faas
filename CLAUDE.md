@@ -1,6 +1,8 @@
 # CLAUDE.md
 
-**faas** — self-hosted Function as a Service CLI in Go. Deploy stateless functions as containerized HTTP services. Single binary, plugin-based container runtime (Docker first), external language templates (Go, Python, Rust, PHP, TypeScript, JavaScript via Bun), config.toml per function, auto-assigned ports, structured JSON logging.
+**FaaS** — self-hosted Function as a Service CLI in Go. Deploy stateless functions as containerized HTTP services. Single binary, plugin-based container runtime (Docker first), external language templates (Go, Python, Rust, PHP, TypeScript, JavaScript via Bun), config.toml per function, auto-assigned ports, structured JSON logging.
+
+**Naming:** The project name is "FaaS" (capitalized) in all prose. The CLI binary, commands, paths, and URLs use lowercase `faas`.
 
 ## Commands
 
@@ -158,6 +160,7 @@ Custom templates at `~/.faas/templates/<language>/` override built-in ones.
 
 - **PHP extensions**: `php:8.5-cli-alpine` has mbstring, curl, dom, PDO, pdo_sqlite, opcache, xml, fileinfo built-in. Never re-install them via `docker-php-ext-install` (causes `cp: can't stat 'modules/*'`). `gd` requires `docker-php-ext-configure gd --with-freetype --with-jpeg` before install.
 - **Adding new languages**: If the language has strict file-level declarations (like Go's `package`/`import` or PHP's `<?php`/`use`), use the separate handler file pattern — never inline embed.
+- **Version/language changes**: When updating a language's base image or runtime version in `template.toml`, also update: README.md "Supported Languages" table, `docs/examples/<language>/README.md` runtime table, and `docs/examples/<language>/config.toml` comments. When adding a new language, also create its `docs/examples/<language>/` directory with handler example, `config.toml`, and `README.md`, and add it to `docs/examples/README.md` TOC.
 
 ## Port Management
 

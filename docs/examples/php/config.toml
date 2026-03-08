@@ -1,0 +1,19 @@
+[function]
+name = "hello-php"
+language = "php"
+entrypoint = "handler.php"
+
+[runtime]
+port = 0                  # Auto-assign
+health_path = "/health"
+
+[build]
+base_image = ""           # Default: php:8.5-cli-alpine3.23
+
+[env]
+# MY_VAR = "value"
+
+[dependencies]
+packages = []
+# Example with dependencies:
+# packages = ["guzzlehttp/guzzle@^7.0", "cocur/slugify@4.6"]

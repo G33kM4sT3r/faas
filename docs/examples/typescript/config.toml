@@ -1,0 +1,19 @@
+[function]
+name = "hello-typescript"
+language = "typescript"
+entrypoint = "handler.ts"
+
+[runtime]
+port = 0                  # Auto-assign
+health_path = "/health"
+
+[build]
+base_image = ""           # Default: oven/bun:1-alpine
+
+[env]
+# MY_VAR = "value"
+
+[dependencies]
+packages = []
+# Example with dependencies:
+# packages = ["zod@3.23.0", "@types/node@22.0.0"]

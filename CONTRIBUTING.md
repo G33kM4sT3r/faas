@@ -1,6 +1,6 @@
-# Contributing to faas
+# Contributing to FaaS
 
-Thanks for your interest in contributing to faas. This document covers the workflow and conventions you need to follow.
+Thanks for your interest in contributing to FaaS. This document covers the workflow and conventions you need to follow.
 
 ## Getting Started
 
@@ -50,6 +50,7 @@ cmd/faas/main.go → cmd/faas/ (root, up, down, ls, logs, init)
   ↓
 internal/config/      internal/template/    internal/builder/
 internal/runtime/     internal/health/      internal/logs/
+internal/state/       internal/logging/
   ↓
 internal/ui/
 ```
@@ -62,7 +63,9 @@ internal/ui/
 | `internal/builder/` | Docker image building from rendered templates |
 | `internal/runtime/` | Runtime interface + Docker implementation |
 | `internal/health/` | Health check polling |
+| `internal/state/` | Deployed function state (`~/.faas/state.json`) |
 | `internal/logs/` | Structured JSON log streaming from containers |
+| `internal/logging/` | CLI logging (zerolog + lumberjack rotation) |
 | `internal/ui/` | Lipgloss styles + bubbletea spinner |
 | `templates/` | External language template directories |
 
@@ -141,13 +144,20 @@ Each language template is a self-contained directory:
 ```
 templates/<language>/
 ├── Dockerfile            # Container build instructions
-├── server.<ext>.tmpl     # HTTP wrapper, embeds user function
+├── server.<ext>.tmpl     # HTTP wrapper template
 └── template.toml         # Metadata: name, extensions, port, health path, base image
 ```
+
+Two embedding strategies based on language constraints:
+
+- **Inline embedding** (Python, Rust, JavaScript, TypeScript): The user function is inserted via `{{.UserFunction}}` directly into the server template. Works because these languages allow module-level declarations anywhere.
+- **Separate handler file** (Go, PHP): The builder writes `handler.go` / `handler.php` alongside the server template. The template calls the handler via native include mechanisms (`Handler()` function call / `require_once`). Required because Go's `package`/`import` and PHP's `<?php`/`use` break with inline embedding.
 
 Supported languages: Go, Python, Rust, PHP, TypeScript, JavaScript (via Bun).
 
 Custom templates at `~/.faas/templates/<language>/` override built-in ones. When adding a new language, create a template directory with all three files and add corresponding E2E test fixtures in `test/e2e/testdata/`.
+
+**Keep docs in sync.** When updating a language's base image or runtime version in `template.toml`, also update the README.md "Supported Languages" table and `docs/examples/<language>/README.md`. When adding a new language, create its `docs/examples/<language>/` directory (handler example, `config.toml`, `README.md`) and add it to the `docs/examples/README.md` TOC.
 
 ## Lint Patterns
 

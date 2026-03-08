@@ -1,0 +1,19 @@
+[function]
+name = "hello-python"
+language = "python"
+entrypoint = "hello.py"
+
+[runtime]
+port = 0                  # Auto-assign
+health_path = "/health"
+
+[build]
+base_image = ""           # Default: python:3.14-alpine3.23
+
+[env]
+# MY_VAR = "value"
+
+[dependencies]
+packages = []
+# Example with dependencies:
+# packages = ["requests@2.31.0", "flask"]

@@ -52,46 +52,22 @@ curl -X POST http://localhost:<port> \
 # {"message": "Hello, World!"}
 ```
 
-That's it. No Dockerfile, no config file, no boilerplate. faas detects the language, generates the container, and starts serving.
+That's it. No Dockerfile, no config file, no boilerplate. FaaS detects the language, generates the container, and starts serving.
 
 ## Supported Languages
 
-| Language | Extension | Runtime |
-|----------|-----------|---------|
-| Go | `.go` | Alpine |
-| Python | `.py` | Python 3.14 |
-| Rust | `.rs` | Rust (multi-stage) |
-| PHP | `.php` | PHP |
-| TypeScript | `.ts` | Bun |
-| JavaScript | `.js` | Bun |
+| Language | Extension | Base Image | Runtime Image |
+|----------|-----------|------------|---------------|
+| Go | `.go` | `golang:1.26-alpine3.23` | `alpine:3.23` |
+| Python | `.py` | `python:3.14-alpine3.23` | — |
+| Rust | `.rs` | `rust:1.94-alpine3.23` | `alpine:3.23` |
+| PHP | `.php` | `php:8.5-cli-alpine3.23` | — |
+| TypeScript | `.ts` | `oven/bun:1-alpine` | — |
+| JavaScript | `.js` | `oven/bun:1-alpine` | — |
 
-Each function implements a `handler` that receives a JSON body and returns a JSON response:
+Go and Rust use multi-stage builds — the final container runs on a minimal `alpine:3.23` image with no compiler toolchain. Python, PHP, and Bun-based languages run directly on their base image.
 
-**Python**
-```python
-def handler(request):
-    name = request.get("name", "world")
-    return {"message": f"Hello, {name}!"}
-```
-
-**Go**
-```go
-func Handler(req map[string]any) map[string]any {
-    name, _ := req["name"].(string)
-    if name == "" {
-        name = "world"
-    }
-    return map[string]any{"message": "Hello, " + name + "!"}
-}
-```
-
-**JavaScript / TypeScript**
-```javascript
-function handler(body) {
-    const name = body.name || "world";
-    return { message: `Hello, ${name}!` };
-}
-```
+Each function implements a `handler` that receives a JSON body and returns a JSON response. See [docs/examples/](docs/examples/) for complete working examples, handler specifications, and dependency usage for every language.
 
 ## Commands
 

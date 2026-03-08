@@ -1,0 +1,19 @@
+[function]
+name = "hello-javascript"
+language = "javascript"
+entrypoint = "handler.js"
+
+[runtime]
+port = 0                  # Auto-assign
+health_path = "/health"
+
+[build]
+base_image = ""           # Default: oven/bun:1-alpine
+
+[env]
+# MY_VAR = "value"
+
+[dependencies]
+packages = []
+# Example with dependencies:
+# packages = ["lodash@4.17.21", "dayjs@1.11.0"]
