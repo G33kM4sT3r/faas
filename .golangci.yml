@@ -1,0 +1,131 @@
+version: "2"
+
+run:
+  go: "1.26"
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    # Core
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+
+    # Style & quality
+    - revive
+    - gocritic
+    - misspell
+    - dupword
+
+    # Error handling (errors.Is/errors.As, error naming)
+    - errorlint
+    - errname
+
+    # No init(), no globals
+    - gochecknoinits
+    - gochecknoglobals
+
+    # No naked returns
+    - nakedret
+
+    # Deep nesting guard
+    - nestif
+
+    # Performance (prealloc slices, unnecessary conversions)
+    - prealloc
+    - unconvert
+
+    # HTTP body close, context propagation
+    - bodyclose
+    - noctx
+
+    # Unused parameters
+    - unparam
+
+  settings:
+    nakedret:
+      max-func-lines: 0 # disallow all naked returns
+    nestif:
+      min-complexity: 4
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - octalLiteral
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: early-return
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: exported
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: var-declaration
+        - name: var-naming
+    errcheck:
+      check-type-assertions: true
+  exclusions:
+    rules:
+      # Cobra commands and flags require package-level vars
+      - linters: [gochecknoglobals]
+        path: cmd/
+      # Allow globals in test files
+      - linters: [gochecknoglobals]
+        path: _test\.go
+      # Allow cuddled error checks in tests
+      - linters: [revive]
+        path: _test\.go
+        text: "exported"
+      # Allow Err* sentinels as package-level vars
+      - linters: [gochecknoglobals]
+        text: "Err[A-Z]"
+      # Allow nolint-annotated globals (lipgloss styles, cobra commands)
+      - linters: [gochecknoglobals]
+        text: "nolint"
+      # Package names that intentionally match stdlib (runtime, template)
+      - linters: [revive]
+        text: "var-naming.*conflict.*standard library"
+      # Template files contain non-Go code patterns
+      - linters: [misspell, dupword]
+        path: templates/
+      # Tests don't need context propagation for net/exec
+      - linters: [noctx]
+        path: _test\.go
+      # Tests use unchecked setup calls
+      - linters: [errcheck]
+        path: _test\.go
+    paths:
+      - third_party
+      - vendor
+      - templates
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/G33kM4sT3r/faas
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

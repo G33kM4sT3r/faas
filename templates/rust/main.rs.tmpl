@@ -1,0 +1,55 @@
+use std::io::{BufRead, BufReader, Write};
+use std::net::TcpListener;
+use serde_json::Value;
+
+// --- user function ---
+{{.UserFunction}}
+// --- end user function ---
+
+fn main() {
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", {{.Port}})).unwrap();
+    println!("{{\"level\":\"info\",\"msg\":\"listening\",\"port\":{}}}",  {{.Port}});
+
+    for stream in listener.incoming() {
+        let mut stream = stream.unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut request_line = String::new();
+        reader.read_line(&mut request_line).unwrap();
+
+        let parts: Vec<&str> = request_line.trim().split_whitespace().collect();
+        if parts.len() < 2 { continue; }
+        let (method, path) = (parts[0], parts[1]);
+
+        // Read headers
+        let mut content_length: usize = 0;
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            if line.trim().is_empty() { break; }
+            if line.to_lowercase().starts_with("content-length:") {
+                content_length = line.split(':').nth(1).unwrap().trim().parse().unwrap_or(0);
+            }
+        }
+
+        if method == "GET" && path == "{{.HealthPath}}" {
+            let response = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok";
+            stream.write_all(response.as_bytes()).unwrap();
+            continue;
+        }
+
+        if method == "POST" {
+            let mut body = vec![0u8; content_length];
+            if content_length > 0 {
+                reader.read_exact(&mut body).ok();
+            }
+            let input: Value = serde_json::from_slice(&body).unwrap_or(Value::Object(Default::default()));
+            let result = handler(input);
+            let result_str = serde_json::to_string(&result).unwrap();
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                result_str.len(), result_str
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+        }
+    }
+}

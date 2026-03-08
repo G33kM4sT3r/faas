@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - name: Run tests
+        run: go test -race ./...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          COMMIT=$(git rev-parse --short HEAD)
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}"
+          BINARY="faas-${VERSION}-${GOOS}-${GOARCH}"
+          CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o "${BINARY}" ./cmd/faas/
+
+      - name: Create archive
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BINARY="faas-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          tar czf "${BINARY}.tar.gz" "${BINARY}" LICENSE README.md
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: faas-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: faas-*-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: artifacts
+        run: sha256sum faas-* > checksums.txt
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          CONTENT=$(awk "/^## \[${VERSION}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md)
+          {
+            echo "body<<CHANGELOG_EOF"
+            echo "$CONTENT"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          body: |
+            ${{ steps.changelog.outputs.body }}
+
+            ## Install
+
+            Download the archive for your platform, extract, and place the binary in your `$PATH`.
+
+            | Platform | Archive |
+            |----------|---------|
+            | Linux (x86_64) | `faas-<version>-linux-amd64.tar.gz` |
+            | Linux (ARM64) | `faas-<version>-linux-arm64.tar.gz` |
+            | macOS (Intel) | `faas-<version>-darwin-amd64.tar.gz` |
+            | macOS (Apple Silicon) | `faas-<version>-darwin-arm64.tar.gz` |
+
+            Verify integrity with `checksums.txt`.
+
+            Requires Docker to run functions.
+
+            ## Build from source
+
+            ```bash
+            make build
+            ```
+
+            Requires Go 1.26+ and Docker.

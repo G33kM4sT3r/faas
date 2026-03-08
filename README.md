@@ -1,2 +1,202 @@
-# faas
-Functions as a Service
+# FaaS - Self-hosted Function as a Service
+
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://golang.org)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![CI](https://github.com/G33kM4sT3r/faas/actions/workflows/ci.yml/badge.svg)](https://github.com/G33kM4sT3r/faas/actions/workflows/ci.yml)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/martin.willig)
+
+Write a function, deploy it as an HTTP service — single binary, no infrastructure setup, no YAML manifests. Just your code in a container.
+
+## Install
+
+Requires **Docker** to run functions.
+
+**Download a release binary** (recommended):
+
+Download the archive for your platform from the [latest release](https://github.com/G33kM4sT3r/faas/releases/latest), then extract and install:
+
+```bash
+tar xzf faas-*-linux-amd64.tar.gz    # or darwin-arm64, etc.
+sudo mv faas-*-linux-amd64 /usr/local/bin/faas
+```
+
+Available for Linux and macOS (amd64/arm64).
+
+**Build from source** (requires Go 1.26+):
+
+```bash
+git clone https://github.com/G33kM4sT3r/faas.git
+cd faas && make build
+```
+
+The binary is written to `bin/faas`.
+
+## Quick Start
+
+```bash
+# Write a function
+cat > hello.py << 'EOF'
+def handler(request):
+    name = request.get("name", "world")
+    return {"message": f"Hello, {name}!"}
+EOF
+
+# Deploy it
+./bin/faas up hello.py
+
+# Call it
+curl -X POST http://localhost:<port> \
+  -H "Content-Type: application/json" \
+  -d '{"name": "World"}'
+
+# {"message": "Hello, World!"}
+```
+
+That's it. No Dockerfile, no config file, no boilerplate. faas detects the language, generates the container, and starts serving.
+
+## Supported Languages
+
+| Language | Extension | Runtime |
+|----------|-----------|---------|
+| Go | `.go` | Alpine |
+| Python | `.py` | Python 3.14 |
+| Rust | `.rs` | Rust (multi-stage) |
+| PHP | `.php` | PHP |
+| TypeScript | `.ts` | Bun |
+| JavaScript | `.js` | Bun |
+
+Each function implements a `handler` that receives a JSON body and returns a JSON response:
+
+**Python**
+```python
+def handler(request):
+    name = request.get("name", "world")
+    return {"message": f"Hello, {name}!"}
+```
+
+**Go**
+```go
+func Handler(req map[string]any) map[string]any {
+    name, _ := req["name"].(string)
+    if name == "" {
+        name = "world"
+    }
+    return map[string]any{"message": "Hello, " + name + "!"}
+}
+```
+
+**JavaScript / TypeScript**
+```javascript
+function handler(body) {
+    const name = body.name || "world";
+    return { message: `Hello, ${name}!` };
+}
+```
+
+## Commands
+
+```
+faas up [func]          Build and deploy a function as an HTTP service
+faas down [name]        Stop and remove a running function
+faas ls                 List deployed functions
+faas logs [name]        Stream function logs
+faas init [func]        Generate a config.toml for a function
+```
+
+### Deploy
+
+```bash
+faas up hello.py                               # Auto-detect language, auto-assign port
+faas up hello.py --name my-func --port 3000    # Explicit name and port
+faas up hello.py --env API_KEY=secret          # Pass environment variables
+faas up hello.py --no-cache                    # Force rebuild
+```
+
+### Manage
+
+```bash
+faas ls                 # Table view of all functions
+faas ls --json          # Machine-readable output
+faas ls --quiet         # Names only
+
+faas logs my-func       # Last 50 lines
+faas logs my-func -f    # Follow (stream)
+faas logs my-func --level error --json
+
+faas down my-func       # Stop one function
+faas down --all         # Stop everything
+```
+
+## Configuration
+
+Auto-generated on first deploy. Override by creating `config.toml` alongside your function:
+
+```toml
+[function]
+name = "hello"
+language = "python"
+entrypoint = "hello.py"
+
+[runtime]
+port = 3000             # 0 = auto-assign (default)
+health_path = "/health"
+
+[build]
+base_image = ""         # Override default base image
+runtime_image = ""      # Override default runtime image
+
+[env]
+API_KEY = "secret"
+
+[dependencies]
+packages = []
+```
+
+## Architecture
+
+Single binary CLI built on [Cobra](https://github.com/spf13/cobra). Dependencies flow inward — lower layers never import higher layers.
+
+```
+cmd/faas/          CLI commands (up, down, ls, logs, init)
+  ↓
+internal/
+├── config/        config.toml parsing + generation
+├── template/      Language detection, template rendering
+├── builder/       Docker build context preparation
+├── runtime/       Container runtime interface (Docker)
+├── health/        Health check polling
+├── state/         Deployed function state (~/.faas/state.json)
+├── logs/          Structured JSON log streaming
+├── logging/       CLI logging (zerolog + rotation)
+└── ui/            Terminal styles + spinner (lipgloss, bubbletea)
+```
+
+The runtime is pluggable — Docker ships built-in, future backends (Podman, Kubernetes) implement the same interface.
+
+## Custom Templates
+
+Override built-in templates or add new languages by placing templates in `~/.faas/templates/<language>/`:
+
+```
+~/.faas/templates/ruby/
+├── Dockerfile
+├── server.rb.tmpl
+└── template.toml
+```
+
+User-defined templates take precedence over built-in ones.
+
+## Development
+
+```bash
+make build            # Build binary
+make test             # Run tests with race detection
+make check            # Format + vet + lint + compile audit
+make test-coverage    # Generate coverage report
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for code conventions and workflow.
+
+## License
+
+[Apache License 2.0](LICENSE)

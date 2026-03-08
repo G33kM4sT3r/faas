@@ -1,0 +1,6 @@
+name = "go"
+extensions = [".go"]
+port = 8080
+health_path = "/health"
+base_image = "golang:1.26-alpine3.23"
+runtime_image = "alpine:3.23"

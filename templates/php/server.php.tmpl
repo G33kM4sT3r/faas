@@ -1,0 +1,50 @@
+<?php
+// --- user function ---
+{{.UserFunction}}
+// --- end user function ---
+
+$host = '0.0.0.0';
+$port = {{.Port}};
+
+$socket = stream_socket_server("tcp://$host:$port", $errno, $errstr);
+if (!$socket) {
+    fwrite(STDERR, "Failed to bind: $errstr ($errno)\n");
+    exit(1);
+}
+
+fwrite(STDOUT, json_encode(["level" => "info", "msg" => "listening", "port" => $port]) . "\n");
+
+while ($conn = stream_socket_accept($socket, -1)) {
+    $request = '';
+    while (($line = fgets($conn)) !== false) {
+        $request .= $line;
+        if (trim($line) === '') break;
+    }
+
+    preg_match('/^(\w+)\s+(\S+)/', $request, $matches);
+    $method = $matches[1] ?? '';
+    $path = $matches[2] ?? '';
+
+    if ($method === 'GET' && $path === '{{.HealthPath}}') {
+        fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+        fclose($conn);
+        continue;
+    }
+
+    $contentLength = 0;
+    if (preg_match('/Content-Length:\s*(\d+)/i', $request, $m)) {
+        $contentLength = (int)$m[1];
+    }
+
+    $body = $contentLength > 0 ? fread($conn, $contentLength) : '{}';
+    $input = json_decode($body, true) ?? [];
+
+    $result = handler($input);
+    $output = json_encode($result);
+
+    $response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " . strlen($output) . "\r\n\r\n" . $output;
+    fwrite($conn, $response);
+    fclose($conn);
+
+    fwrite(STDOUT, json_encode(["level" => "info", "method" => $method, "path" => $path]) . "\n");
+}

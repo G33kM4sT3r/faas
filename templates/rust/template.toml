@@ -1,0 +1,6 @@
+name = "rust"
+extensions = [".rs"]
+port = 8080
+health_path = "/health"
+base_image = "rust:1.94-alpine3.23"
+runtime_image = "alpine:3.23"

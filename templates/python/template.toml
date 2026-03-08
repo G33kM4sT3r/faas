@@ -1,0 +1,5 @@
+name = "python"
+extensions = [".py"]
+port = 8080
+health_path = "/health"
+base_image = "python:3.14-alpine3.23"

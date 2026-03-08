@@ -1,0 +1,62 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"time"
+)
+
+// --- user function ---
+{{.UserFunction}}
+// --- end user function ---
+
+func main() {
+	logger := log.New(os.Stdout, "", 0)
+
+	http.HandleFunc("{{.HealthPath}}", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "ok")
+	})
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req map[string]any
+		if r.ContentLength > 0 {
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+		}
+		if req == nil {
+			req = make(map[string]any)
+		}
+
+		start := time.Now()
+		result := Handler(req)
+		duration := time.Since(start)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+
+		logEntry, _ := json.Marshal(map[string]any{
+			"level":       "info",
+			"method":      r.Method,
+			"path":        r.URL.Path,
+			"duration_ms": duration.Milliseconds(),
+		})
+		logger.Println(string(logEntry))
+	})
+
+	addr := fmt.Sprintf("0.0.0.0:%d", {{.Port}})
+	entry, _ := json.Marshal(map[string]any{"level": "info", "msg": "listening", "port": {{.Port}}})
+	logger.Println(string(entry))
+	log.Fatal(http.ListenAndServe(addr, nil))
+}

@@ -1,0 +1,5 @@
+name = "typescript"
+extensions = [".ts"]
+port = 8080
+health_path = "/health"
+base_image = "oven/bun:1-alpine"
