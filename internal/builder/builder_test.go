@@ -12,7 +12,7 @@ import (
 func TestPrepareBuildContextPython(t *testing.T) {
 	funcDir := t.TempDir()
 	funcFile := filepath.Join(funcDir, "hello.py")
-	if err := os.WriteFile(funcFile, []byte("def handler(request):\n    return {\"msg\": \"hello\"}"), 0o644); err != nil {
+	if err := os.WriteFile(funcFile, []byte("def handler(request):\n    return {\"msg\": \"hello\"}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -51,7 +51,7 @@ func TestPrepareBuildContextPython(t *testing.T) {
 func TestPrepareBuildContextWithDeps(t *testing.T) {
 	funcDir := t.TempDir()
 	funcFile := filepath.Join(funcDir, "hello.py")
-	os.WriteFile(funcFile, []byte("def handler(r): return {}"), 0o644)
+	os.WriteFile(funcFile, []byte("def handler(r): return {}"), 0o600)
 
 	cfg := &config.Config{
 		Function: config.Function{
@@ -97,7 +97,7 @@ func TestPrepareBuildContextPHPHandlerSeparateFile(t *testing.T) {
 	funcDir := t.TempDir()
 	// User writes a complete PHP file with <?php tag and use statements
 	phpCode := "<?php\nuse Some\\Library\\Thing;\n\nfunction handler(array $input): array {\n    return ['ok' => true];\n}\n"
-	if err := os.WriteFile(filepath.Join(funcDir, "hello.php"), []byte(phpCode), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(funcDir, "hello.php"), []byte(phpCode), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -143,7 +143,7 @@ func TestPrepareBuildContextGoHandlerSeparateFile(t *testing.T) {
 	funcDir := t.TempDir()
 	// User writes a complete Go file with package, imports, and handler
 	goCode := "package main\n\nimport \"strings\"\n\nfunc Handler(req map[string]any) map[string]any {\n\treturn map[string]any{\"upper\": strings.ToUpper(\"hello\")}\n}\n"
-	if err := os.WriteFile(filepath.Join(funcDir, "hello.go"), []byte(goCode), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(funcDir, "hello.go"), []byte(goCode), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -240,7 +240,7 @@ func TestWrapperOutputName(t *testing.T) {
 
 func TestPrepareBuildContextJavaScript(t *testing.T) {
 	funcDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(funcDir, "hello.js"), []byte("function handler(b) { return {}; }"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(funcDir, "hello.js"), []byte("function handler(b) { return {}; }"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -269,7 +269,7 @@ func TestPrepareBuildContextJavaScript(t *testing.T) {
 
 func TestPrepareBuildContextJSDeps(t *testing.T) {
 	funcDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(funcDir, "hello.js"), []byte("function handler(b) { return {}; }"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(funcDir, "hello.js"), []byte("function handler(b) { return {}; }"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -322,7 +322,7 @@ func TestPrepareBuildContextMissingFile(t *testing.T) {
 
 func TestPrepareBuildContextInvalidLanguage(t *testing.T) {
 	funcDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(funcDir, "hello.xyz"), []byte("code"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(funcDir, "hello.xyz"), []byte("code"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -343,7 +343,7 @@ func TestPrepareBuildContextInvalidLanguage(t *testing.T) {
 
 func TestPrepareBuildContextWithOverrides(t *testing.T) {
 	funcDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(funcDir, "hello.py"), []byte("def handler(r): return {}"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(funcDir, "hello.py"), []byte("def handler(r): return {}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -510,9 +510,9 @@ func TestWriteGoMod(t *testing.T) {
 		packages []string
 		contains []string
 	}{
-		{"no deps", nil, []string{"module faas-func", "go 1.26"}},
-		{"no deps empty", []string{}, []string{"module faas-func", "go 1.26"}},
-		{"with deps", []string{"github.com/fatih/color@v1.18.0"}, []string{"module faas-func", "go 1.26"}},
+		{"no deps", nil, []string{"module faas-func", "go " + goModDirective()}},
+		{"no deps empty", []string{}, []string{"module faas-func", "go " + goModDirective()}},
+		{"with deps", []string{"github.com/fatih/color@v1.18.0"}, []string{"module faas-func", "go " + goModDirective()}},
 	}
 
 	for _, tt := range tests {
@@ -563,6 +563,9 @@ func TestParsePackageVersion(t *testing.T) {
 		{"scoped npm no version", "@types/node", "@types/node", ""},
 		{"rust crate", "serde@1.0", "serde", "1.0"},
 		{"php package", "guzzlehttp/guzzle@^7.0", "guzzlehttp/guzzle", "^7.0"},
+		{"trailing @ empty version", "mylib@", "mylib", ""},
+		{"empty string", "", "", ""},
+		{"pseudo version", "github.com/foo/bar@v0.0.0-20260101000000-abcdef123456", "github.com/foo/bar", "v0.0.0-20260101000000-abcdef123456"},
 	}
 
 	for _, tt := range tests {
@@ -573,6 +576,33 @@ func TestParsePackageVersion(t *testing.T) {
 			}
 			if version != tt.version {
 				t.Errorf("version: expected %q, got %q", tt.version, version)
+			}
+		})
+	}
+}
+
+func TestParseGoVersion(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"release", "go1.26.2", "1.26"},
+		{"release no patch", "go1.27", "1.27"},
+		{"two digit minor", "go1.100.5", "1.100"},
+		{"release candidate", "go1.27rc1", "1.27"},
+		{"beta", "go1.27beta1", "1.27"},
+		{"devel tip", "devel go1.27-abcdef Tue Apr 1 00:00:00 2026 +0000", "1.27"},
+		{"devel no prefix", "go1.28-deadbeef", "1.28"},
+		{"empty", "", "1.26"},
+		{"no version", "definitely not a go version", "1.26"},
+		{"missing minor", "go1", "1.26"},
+		{"junk", "go.bad", "1.26"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseGoVersion(tt.input); got != tt.want {
+				t.Errorf("parseGoVersion(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
@@ -595,7 +625,7 @@ func TestPrepareBuildContextAllLanguages(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.lang, func(t *testing.T) {
 			funcDir := t.TempDir()
-			if err := os.WriteFile(filepath.Join(funcDir, tt.file), []byte(tt.funcSource), 0o644); err != nil {
+			if err := os.WriteFile(filepath.Join(funcDir, tt.file), []byte(tt.funcSource), 0o600); err != nil {
 				t.Fatal(err)
 			}
 

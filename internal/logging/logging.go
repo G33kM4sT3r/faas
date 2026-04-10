@@ -12,7 +12,7 @@ import (
 // Setup initializes a zerolog logger writing to a rotating log file.
 // verbose=true sets debug level; verbose=false sets warn level.
 func Setup(logDir string, verbose bool) zerolog.Logger {
-	if err := os.MkdirAll(logDir, 0o755); err != nil {
+	if err := os.MkdirAll(logDir, 0o750); err != nil {
 		return zerolog.New(os.Stderr).With().Timestamp().Logger()
 	}
 

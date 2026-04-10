@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/G33kM4sT3r/faas/internal/runtime"
 	"github.com/G33kM4sT3r/faas/internal/state"
 	"github.com/G33kM4sT3r/faas/internal/ui"
 )
@@ -37,13 +36,15 @@ func runLs(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	docker, _ := runtime.NewDocker(ctx)
+	docker, _ := newRuntime(ctx)
 	if docker != nil {
 		for i := range fns {
 			status, err := docker.Status(ctx, fns[i].ContainerID)
 			if err != nil || !status.Running {
 				fns[i].Status = state.StatusStopped
-				_ = store.UpdateStatus(fns[i].Name, state.StatusStopped)
+				if err := store.UpdateStatus(fns[i].Name, state.StatusStopped); err != nil {
+					logger.Debug().Str("name", fns[i].Name).Err(err).Msg("update status to stopped failed")
+				}
 			}
 		}
 	}
@@ -54,7 +55,10 @@ func runLs(cmd *cobra.Command, args []string) error {
 	}
 
 	if lsJSON {
-		data, _ := json.MarshalIndent(fns, "", "  ")
+		data, err := json.MarshalIndent(fns, "", "  ")
+		if err != nil {
+			return fmt.Errorf("encoding functions as JSON: %w", err)
+		}
 		fmt.Println(string(data))
 		return nil
 	}

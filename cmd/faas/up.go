@@ -44,6 +44,10 @@ func setupUpFlags() {
 }
 
 func runUp(cmd *cobra.Command, args []string) error {
+	return doUp(cmd, args, upForce)
+}
+
+func doUp(cmd *cobra.Command, args []string, force bool) error {
 	ctx := cmd.Context()
 	funcPath := args[0]
 
@@ -73,9 +77,12 @@ func runUp(cmd *cobra.Command, args []string) error {
 	applyEnvOverrides(&cfg, upEnvs)
 
 	if existing, err := store.Get(cfg.Function.Name); err == nil {
-		if !upForce {
-			return fmt.Errorf("function %q is already running on http://localhost:%d\n  → to redeploy: faas down %s && faas up %s\n  → to force redeploy: faas up %s --force",
-				cfg.Function.Name, existing.Port, cfg.Function.Name, funcPath, funcPath)
+		if !force {
+			return ui.Errorf(
+				fmt.Sprintf("function %q is already running on http://localhost:%d", cfg.Function.Name, existing.Port),
+				fmt.Sprintf("to redeploy: faas down %s && faas up %s", cfg.Function.Name, funcPath),
+				fmt.Sprintf("to force redeploy: faas up %s --force", funcPath),
+			)
 		}
 		if err := tearDown(ctx, &existing); err != nil {
 			logger.Warn().Err(err).Msg("failed to tear down existing function")
@@ -88,9 +95,9 @@ func runUp(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	docker, err := runtime.NewDocker(ctx)
+	docker, err := newRuntime(ctx)
 	if err != nil {
-		return fmt.Errorf("%s Cannot connect to Docker daemon\n  → is Docker running? Try: docker info", ui.SymbolError)
+		return ui.Errorf("Cannot connect to Docker daemon", "is Docker running? Try: docker info")
 	}
 
 	buildCtx, err := builder.PrepareBuildContext(funcDir, &cfg, filepath.Join(faasHome(), "templates"))
@@ -112,7 +119,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 		return img.Tag, nil
 	})
 	if spinErr != nil {
-		return fmt.Errorf("%s Build failed\n  %w", ui.SymbolError, spinErr)
+		return ui.Wrapf("Build failed", spinErr)
 	}
 	fmt.Printf("%s Built %s\n", ui.SymbolSuccess, ui.StyleBold.Render(buildCtx.ImageTag))
 
@@ -124,7 +131,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 		Env:      envMap,
 	})
 	if err != nil {
-		return fmt.Errorf("%s Start failed\n  %w", ui.SymbolError, err)
+		return ui.Wrapf("Start failed", err)
 	}
 
 	healthURL := fmt.Sprintf("http://localhost:%d%s", container.Port, cfg.Runtime.HealthPath)
@@ -132,17 +139,10 @@ func runUp(cmd *cobra.Command, args []string) error {
 		return "", health.WaitForHealthy(ctx, healthURL, health.Options{})
 	})
 	if spinErr != nil {
-		_ = store.Set(&state.Function{
-			Name:        cfg.Function.Name,
-			Path:        funcDir,
-			Language:    cfg.Function.Language,
-			ContainerID: container.ID,
-			ImageID:     buildCtx.ImageTag,
-			Port:        container.Port,
-			Status:      state.StatusError,
-			CreatedAt:   time.Now().UTC(),
-		})
-		return fmt.Errorf("%s Health check failed\n  → run: faas logs %s", ui.SymbolError, cfg.Function.Name)
+		logger.Warn().Str("name", cfg.Function.Name).Err(spinErr).Msg("health check failed; tearing down container")
+		tearDownContainer(ctx, docker, container.ID)
+		return ui.Errorf("Health check failed — container removed",
+			"inspect logs above or retry: faas up "+cfg.Function.Name)
 	}
 
 	_ = store.Set(&state.Function{
@@ -162,7 +162,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func resolveFuncPath(path string) (dir, entrypoint string, err error) {
+func resolveFuncPath(path string) (string, string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return "", "", fmt.Errorf("cannot access %s: %w", path, err)
@@ -215,20 +215,55 @@ func resolveEnvVars(env map[string]string) map[string]string {
 	for k, v := range env {
 		if strings.HasPrefix(v, "${") && strings.HasSuffix(v, "}") {
 			envName := v[2 : len(v)-1]
-			resolved[k] = os.Getenv(envName)
-		} else {
-			resolved[k] = v
+			val, ok := os.LookupEnv(envName)
+			if !ok {
+				fmt.Printf("%s env var %q referenced in config is not set on host\n", ui.SymbolWarning, envName)
+			}
+			resolved[k] = val
+			continue
 		}
+		resolved[k] = v
 	}
 	return resolved
 }
 
+// tearDown stops and removes a function's container during a forced
+// redeploy. Unlike `faas down` (stopAndRemove), this does NOT remove the
+// image — the very next deploy will use the same image tag, so wiping
+// it would force an unnecessary rebuild.
 func tearDown(ctx context.Context, fn *state.Function) error {
-	docker, err := runtime.NewDocker(ctx)
+	docker, err := newRuntime(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("connecting to docker: %w", err)
 	}
-	_ = docker.Stop(ctx, fn.ContainerID)
-	_ = docker.Remove(ctx, fn.ContainerID)
-	return store.Remove(fn.Name)
+
+	var errs []error
+	if err := docker.Stop(ctx, fn.ContainerID); err != nil {
+		errs = append(errs, fmt.Errorf("stop: %w", err))
+	}
+	containerGone := true
+	if err := docker.Remove(ctx, fn.ContainerID); err != nil {
+		errs = append(errs, fmt.Errorf("remove: %w", err))
+		containerGone = false
+	}
+	// Only wipe state when the container is actually gone — otherwise the
+	// user can retry teardown against the still-existing container.
+	if containerGone {
+		if err := store.Remove(fn.Name); err != nil {
+			errs = append(errs, fmt.Errorf("state remove: %w", err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// tearDownContainer stops and removes a container, logging any errors.
+// Used on health-check failure paths where we want the container gone but
+// the command still needs to return a clear error to the user.
+func tearDownContainer(ctx context.Context, r runtime.Runtime, id string) {
+	if err := r.Stop(ctx, id); err != nil {
+		logger.Warn().Str("id", id).Err(err).Msg("stop failed during teardown")
+	}
+	if err := r.Remove(ctx, id); err != nil {
+		logger.Warn().Str("id", id).Err(err).Msg("remove failed during teardown")
+	}
 }

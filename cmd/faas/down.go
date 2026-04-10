@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -31,9 +34,9 @@ func setupDownFlags() {
 func runDown(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
-	docker, err := runtime.NewDocker(ctx)
+	docker, err := newRuntime(ctx)
 	if err != nil {
-		return fmt.Errorf("%s Cannot connect to Docker daemon", ui.SymbolError)
+		return ui.Errorf("Cannot connect to Docker daemon", "is Docker running? Try: docker info")
 	}
 
 	if downAll {
@@ -41,20 +44,20 @@ func runDown(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+		var errs []error
 		for i := range fns {
-			_ = docker.Stop(ctx, fns[i].ContainerID)
-			_ = docker.Remove(ctx, fns[i].ContainerID)
-			if !downKeepImage {
-				_ = docker.RemoveImage(ctx, fns[i].ImageID)
+			if err := stopAndRemove(ctx, docker, &fns[i], downKeepImage); err != nil {
+				errs = append(errs, err)
+				fmt.Printf("%s Failed to fully remove %q: %v\n", ui.SymbolError, fns[i].Name, err)
+				continue
 			}
-			_ = store.Remove(fns[i].Name)
 			fmt.Printf("%s Stopped and removed %q\n", ui.SymbolSuccess, fns[i].Name)
 		}
-		return nil
+		return errors.Join(errs...)
 	}
 
 	if len(args) == 0 {
-		return fmt.Errorf("provide a function name, or use --all")
+		return errors.New("provide a function name, or use --all")
 	}
 
 	name := args[0]
@@ -62,25 +65,53 @@ func runDown(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		if errors.Is(err, state.ErrNotFound) {
 			fns, _ := store.List()
-			msg := fmt.Sprintf("%s Function %q not found\n", ui.SymbolError, name)
+			var b strings.Builder
+			b.WriteString(ui.SymbolError)
+			b.WriteString(" Function ")
+			b.WriteString(strconv.Quote(name))
+			b.WriteString(" not found\n")
 			if len(fns) > 0 {
-				msg += "\n  Running functions:\n"
+				b.WriteString("\n  Running functions:\n")
 				for i := range fns {
-					msg += fmt.Sprintf("    %s  %s  :%d  %s\n", fns[i].Name, fns[i].Language, fns[i].Port, fns[i].Status)
+					fmt.Fprintf(&b, "    %s  %s  :%d  %s\n", fns[i].Name, fns[i].Language, fns[i].Port, fns[i].Status)
 				}
 			}
-			return fmt.Errorf("%s", msg)
+			return errors.New(b.String())
 		}
 		return err
 	}
 
-	_ = docker.Stop(ctx, fn.ContainerID)
-	_ = docker.Remove(ctx, fn.ContainerID)
-	if !downKeepImage {
-		_ = docker.RemoveImage(ctx, fn.ImageID)
+	if err := stopAndRemove(ctx, docker, &fn, downKeepImage); err != nil {
+		return ui.Wrapf(fmt.Sprintf("Failed to fully remove %q", fn.Name), err)
 	}
-	_ = store.Remove(fn.Name)
-
 	fmt.Printf("%s Stopped and removed %q\n", ui.SymbolSuccess, fn.Name)
 	return nil
+}
+
+// stopAndRemove runs Stop, Remove, optionally RemoveImage, and removes the
+// function from state. State is wiped only when the container is gone —
+// otherwise it stays so the user can retry. Cleanup errors are aggregated
+// via errors.Join so every failure surfaces. Image removal is best-effort
+// and never blocks state cleanup (an image may be shared across functions).
+func stopAndRemove(ctx context.Context, r runtime.Runtime, fn *state.Function, keepImage bool) error {
+	var errs []error
+	if err := r.Stop(ctx, fn.ContainerID); err != nil {
+		errs = append(errs, fmt.Errorf("stop %s: %w", fn.Name, err))
+	}
+	containerGone := true
+	if err := r.Remove(ctx, fn.ContainerID); err != nil {
+		errs = append(errs, fmt.Errorf("remove %s: %w", fn.Name, err))
+		containerGone = false
+	}
+	if !keepImage {
+		if err := r.RemoveImage(ctx, fn.ImageID); err != nil {
+			logger.Debug().Err(err).Str("image", fn.ImageID).Msg("image removal failed (possibly shared)")
+		}
+	}
+	if containerGone {
+		if err := store.Remove(fn.Name); err != nil {
+			errs = append(errs, fmt.Errorf("state remove %s: %w", fn.Name, err))
+		}
+	}
+	return errors.Join(errs...)
 }

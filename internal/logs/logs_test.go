@@ -134,3 +134,24 @@ func TestFilterByLevelDebug(t *testing.T) {
 		t.Errorf("debug should include all levels, got %d", len(filtered))
 	}
 }
+
+func TestFormatLineRendersExtraFields(t *testing.T) {
+	line := `{"level":"info","msg":"login","time":"12:34:56","user_id":"bob","trace_id":"abc"}`
+	out := FormatLine(line)
+	if !strings.Contains(out, "user_id=bob") {
+		t.Errorf("expected 'user_id=bob' in output, got: %q", out)
+	}
+	if !strings.Contains(out, "trace_id=abc") {
+		t.Errorf("expected 'trace_id=abc' in output, got: %q", out)
+	}
+	if !strings.Contains(out, "login") {
+		t.Errorf("expected 'login' message in output, got: %q", out)
+	}
+}
+
+func TestFormatLineNonJSONPassthrough(t *testing.T) {
+	line := "plain text, not JSON"
+	if out := FormatLine(line); out != line {
+		t.Errorf("non-JSON should pass through unchanged, got: %q", out)
+	}
+}

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 )
@@ -29,5 +30,18 @@ func TestCheckPortAvailableOnUsedPort(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 	if err := CheckPortAvailable(context.Background(), port); err == nil {
 		t.Errorf("port %d should be in use", port)
+	}
+}
+
+func TestCheckPortAvailableCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := CheckPortAvailable(ctx, 1)
+	if err == nil {
+		t.Fatal("expected error on cancelled context, got nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
 	}
 }

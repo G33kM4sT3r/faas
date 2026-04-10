@@ -2,7 +2,10 @@
 package ui
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"strings"
 
 	"charm.land/lipgloss/v2"
 )
@@ -28,10 +31,31 @@ var (
 	SymbolError = StyleError.Render("✗")
 	// SymbolWarning is a yellow exclamation mark.
 	SymbolWarning = StyleWarning.Render("!")
+	// SymbolInfo is a blue info glyph.
+	SymbolInfo = StyleURL.Render("ℹ")
 )
 
 // ColorsDisabled returns true when terminal colors should be suppressed.
 func ColorsDisabled() bool {
 	_, ok := os.LookupEnv("NO_COLOR")
 	return ok
+}
+
+// Errorf formats a user-facing error with the error glyph and optional
+// hint lines prefixed with an arrow.
+func Errorf(msg string, hints ...string) error {
+	var b strings.Builder
+	b.WriteString(SymbolError)
+	b.WriteString(" ")
+	b.WriteString(msg)
+	for _, h := range hints {
+		b.WriteString("\n  → ")
+		b.WriteString(h)
+	}
+	return errors.New(b.String())
+}
+
+// Wrapf wraps an underlying error with the error glyph and a headline.
+func Wrapf(headline string, err error) error {
+	return fmt.Errorf("%s %s\n  %w", SymbolError, headline, err)
 }

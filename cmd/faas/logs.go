@@ -43,14 +43,14 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	fn, err := store.Get(name)
 	if err != nil {
 		if errors.Is(err, state.ErrNotFound) {
-			return fmt.Errorf("%s Function %q not found\n  → run: faas ls", ui.SymbolError, name)
+			return ui.Errorf(fmt.Sprintf("Function %q not found", name), "run: faas ls")
 		}
 		return err
 	}
 
-	docker, err := runtime.NewDocker(ctx)
+	docker, err := newRuntime(ctx)
 	if err != nil {
-		return fmt.Errorf("%s Cannot connect to Docker daemon", ui.SymbolError)
+		return ui.Errorf("Cannot connect to Docker daemon", "is Docker running? Try: docker info")
 	}
 
 	follow := logsFollow && !logsNoFollow

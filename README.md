@@ -72,18 +72,24 @@ Each function implements a `handler` that receives a JSON body and returns a JSO
 ## Commands
 
 ```
-faas up <file|dir>     Build and deploy a function as an HTTP service
-faas down [name]       Stop and remove a running function
-faas ls                List deployed functions
-faas logs <name>       Stream function logs
-faas init <file>       Generate a config.toml for a function
+faas up <file|dir>      Build and deploy a function as an HTTP service
+faas down [name]        Stop and remove a running function
+faas ls                 List deployed functions
+faas logs <name>        Stream function logs
+faas invoke <name>      Call a deployed function over HTTP
+faas dev <path>         Run with hot-reload on file changes
+faas init <file>        Generate a config.toml for a function
+faas completion <shell> Generate shell completion script
 ```
 
 ```bash
 faas up hello.py --name my-func --port 3000 --env API_KEY=secret
-faas down my-func                    # or: faas down --all
-faas ls --json                       # table, JSON, or --quiet
-faas logs my-func --level error      # filter + follow by default
+faas down my-func                          # or: faas down --all
+faas ls --json                             # table, JSON, or --quiet
+faas logs my-func --level error            # filter + follow by default
+faas invoke my-func --data '{"name":"world"}'  # POST + pretty JSON
+faas dev hello.py                          # rebuild on every save
+faas completion bash | sudo tee /etc/bash_completion.d/faas
 ```
 
 See [docs/cli-reference.md](docs/cli-reference.md) for the full CLI reference with all flags, configuration options, and dependency management.

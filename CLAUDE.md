@@ -60,12 +60,12 @@ internal/ui/
 | Library | Version | Module Path |
 |---------|---------|-------------|
 | Cobra | v1.10.2 | `github.com/spf13/cobra` |
-| Bubbletea | v2.0.1 | `charm.land/bubbletea/v2` |
-| Bubbles | v2.0.0 | `charm.land/bubbles/v2` |
-| Lipgloss | v2.0.0 | `charm.land/lipgloss/v2` |
-| Zerolog | v1.34.0 | `github.com/rs/zerolog` |
+| Bubbletea | v2.0.2 | `charm.land/bubbletea/v2` |
+| Bubbles | v2.1.0 | `charm.land/bubbles/v2` |
+| Lipgloss | v2.0.2 | `charm.land/lipgloss/v2` |
+| Zerolog | v1.35.0 | `github.com/rs/zerolog` |
 | Lumberjack | v2.2.1 | `gopkg.in/natefinch/lumberjack.v2` |
-| go-toml | v2.2.4 | `github.com/pelletier/go-toml/v2` |
+| go-toml | v2.3.0 | `github.com/pelletier/go-toml/v2` |
 
 ## Implementation Discipline
 

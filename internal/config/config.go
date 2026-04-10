@@ -12,6 +12,19 @@ import (
 // ErrAlreadyExists is returned when Generate is called but config.toml already exists.
 var ErrAlreadyExists = errors.New("config.toml already exists")
 
+// ErrInvalidConfig is returned when config.toml fails validation.
+var ErrInvalidConfig = errors.New("invalid config.toml")
+
+// supportedLanguages lists the built-in language templates.
+var supportedLanguages = map[string]struct{}{ //nolint:gochecknoglobals // constant lookup table
+	"go":         {},
+	"python":     {},
+	"rust":       {},
+	"php":        {},
+	"typescript": {},
+	"javascript": {},
+}
+
 // Config represents the full config.toml structure.
 type Config struct {
 	Function     Function          `toml:"function"`
@@ -45,9 +58,9 @@ type Build struct {
 	RuntimeImage string `toml:"runtime_image"`
 }
 
-// Load reads and parses a config.toml file.
+// Load reads, parses, and validates a config.toml file.
 func Load(path string) (Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // user-supplied config path is the API contract
 	if err != nil {
 		return Config{}, fmt.Errorf("reading config: %w", err)
 	}
@@ -57,7 +70,29 @@ func Load(path string) (Config, error) {
 		return Config{}, fmt.Errorf("parsing config: %w", err)
 	}
 
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
+}
+
+// Validate returns an error if the config is missing required fields or
+// references an unsupported language.
+func (c *Config) Validate() error {
+	if c.Function.Name == "" {
+		return fmt.Errorf("%w: function.name is required", ErrInvalidConfig)
+	}
+	if c.Function.Language == "" {
+		return fmt.Errorf("%w: function.language is required", ErrInvalidConfig)
+	}
+	if c.Function.Entrypoint == "" {
+		return fmt.Errorf("%w: function.entrypoint is required", ErrInvalidConfig)
+	}
+	if _, ok := supportedLanguages[c.Function.Language]; !ok {
+		return fmt.Errorf("%w: unsupported language %q (supported: go, python, rust, php, typescript, javascript)",
+			ErrInvalidConfig, c.Function.Language)
+	}
+	return nil
 }
 
 // Generate creates a config.toml with sensible defaults.
@@ -85,7 +120,7 @@ func Generate(path, name, language, entrypoint string) error {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("writing config: %w", err)
 	}
 

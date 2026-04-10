@@ -3,8 +3,55 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestLoadValidatesRequiredFields(t *testing.T) {
+	tests := []struct {
+		name    string
+		toml    string
+		wantErr string
+	}{
+		{
+			name:    "missing name",
+			toml:    "[function]\nlanguage = \"go\"\nentrypoint = \"h.go\"\n",
+			wantErr: "function.name is required",
+		},
+		{
+			name:    "missing language",
+			toml:    "[function]\nname = \"h\"\nentrypoint = \"h.go\"\n",
+			wantErr: "function.language is required",
+		},
+		{
+			name:    "missing entrypoint",
+			toml:    "[function]\nname = \"h\"\nlanguage = \"go\"\n",
+			wantErr: "function.entrypoint is required",
+		},
+		{
+			name:    "unknown language",
+			toml:    "[function]\nname = \"h\"\nlanguage = \"cobol\"\nentrypoint = \"h.cbl\"\n",
+			wantErr: `unsupported language "cobol"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "config.toml")
+			if err := os.WriteFile(path, []byte(tt.toml), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_, err := Load(path)
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("expected error containing %q, got %q", tt.wantErr, err.Error())
+			}
+		})
+	}
+}
 
 func TestLoadFromFile(t *testing.T) {
 	dir := t.TempDir()
@@ -28,7 +75,7 @@ health_path = "/health"
 base_image = "python:3.12-slim"
 `
 	configPath := filepath.Join(dir, "config.toml")
-	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -103,7 +150,7 @@ func TestGenerateDoesNotOverwrite(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.toml")
 
-	if err := os.WriteFile(configPath, []byte("existing"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("existing"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 
 	"charm.land/bubbles/v2/spinner"
@@ -51,12 +52,12 @@ func RunWithSpinner(message string, workFn func() (string, error)) (string, erro
 
 	fm, ok := finalModel.(spinnerModel)
 	if !ok {
-		return "", fmt.Errorf("unexpected model type")
+		return "", errors.New("unexpected model type")
 	}
 	if fm.result != nil {
 		return fm.result.Output, fm.result.Err
 	}
-	return "", fmt.Errorf("spinner exited without result")
+	return "", errors.New("spinner exited without result")
 }
 
 func (m spinnerModel) Init() tea.Cmd { //nolint:gocritic // value receiver required by tea.Model interface

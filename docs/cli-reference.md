@@ -255,6 +255,93 @@ faas logs my-func -f -l 20
 
 ---
 
+## faas dev
+
+Run a function with hot-reload — re-deploys automatically when the source file changes.
+
+```
+faas dev <path>
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `path` | yes | Path to the function file or its directory. |
+
+### Flags
+
+None.
+
+### Behavior
+
+- Performs an initial `faas up` deploy
+- Watches the file (or its parent directory, for editors that do atomic-rename on save) using fsnotify
+- Coalesces rapid writes via a 250ms debounce window
+- Each change triggers a `faas up --force` rebuild and redeploy
+- Ctrl+C stops watching and leaves the function running
+
+### Example
+
+```bash
+faas dev hello.py
+# ℹ Watching hello.py for changes (Ctrl+C to stop)
+# ...edit hello.py...
+# ℹ change detected — rebuilding
+# ✓ Built ...
+# ✓ Running on http://localhost:54321
+```
+
+---
+
+## faas invoke
+
+Invoke a deployed function over HTTP without remembering its port.
+
+```
+faas invoke <name> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | yes | The function name as shown by `faas ls`. |
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-X, --method` | `POST` | HTTP method. |
+| `-d, --data` | (none) | Request body. Literal string, or `@path/to/file.json` to read from file. |
+| `-H, --header` | (none) | Extra request header `KEY: VALUE`. Repeatable. |
+| `--path` | `/` | Request path. |
+
+### Behavior
+
+- Resolves the function's auto-assigned port from state, then POSTs to `http://localhost:<port><path>`
+- Sets `Content-Type: application/json` automatically when a body is provided and no `Content-Type` header was given
+- Pretty-prints JSON responses; falls back to raw bytes for non-JSON
+- 30-second client timeout
+
+### Examples
+
+```bash
+# Quick POST with JSON body
+faas invoke hello --data '{"name":"world"}'
+
+# Read body from a file
+faas invoke hello --data @payload.json
+
+# GET against /health
+faas invoke hello -X GET --path /health
+
+# Custom header
+faas invoke hello -H "X-Trace-Id: abc123" -d '{"x":1}'
+```
+
+---
+
 ## faas init
 
 Generate a `config.toml` for a function file.
@@ -313,6 +400,52 @@ faas init hello.py
 # Then customize and deploy
 vim config.toml
 faas up hello.py
+```
+
+---
+
+## faas completion
+
+Generate a shell completion script.
+
+```
+faas completion <bash|zsh|fish|powershell>
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `shell` | yes | One of `bash`, `zsh`, `fish`, `powershell`. |
+
+### Flags
+
+None.
+
+### Install
+
+```bash
+# bash
+faas completion bash | sudo tee /etc/bash_completion.d/faas       # Linux
+faas completion bash > $(brew --prefix)/etc/bash_completion.d/faas  # macOS
+
+# zsh
+faas completion zsh > "${fpath[1]}/_faas"
+
+# fish
+faas completion fish > ~/.config/fish/completions/faas.fish
+
+# powershell
+faas completion powershell > faas.ps1
+# then dot-source it from your $PROFILE
+```
+
+### Load completions for the current shell only
+
+```bash
+source <(faas completion bash)
+source <(faas completion zsh)
+faas completion fish | source
 ```
 
 ---

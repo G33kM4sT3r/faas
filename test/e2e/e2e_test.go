@@ -1,8 +1,9 @@
+//go:build e2e
+
 package e2e
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -38,7 +39,7 @@ func TestLanguageLifecycle(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.lang, func(t *testing.T) {
 			funcFile := filepath.Join("testdata", tt.file)
-			name := fmt.Sprintf("e2e-%s", tt.lang)
+			name := "e2e-" + tt.lang
 
 			port := faasUp(t, binPath, funcFile, name)
 			defer faasDown(t, binPath, name)
@@ -98,18 +99,18 @@ func TestDependencyLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatalf("reading fixture %s: %v", srcFunc, err)
 			}
-			if err := os.WriteFile(dstFunc, funcData, 0o644); err != nil {
+			if err := os.WriteFile(dstFunc, funcData, 0o600); err != nil {
 				t.Fatalf("writing %s: %v", dstFunc, err)
 			}
 			configData, err := os.ReadFile(srcConfig)
 			if err != nil {
 				t.Fatalf("reading fixture %s: %v", srcConfig, err)
 			}
-			if err := os.WriteFile(dstConfig, configData, 0o644); err != nil {
+			if err := os.WriteFile(dstConfig, configData, 0o600); err != nil {
 				t.Fatalf("writing %s: %v", dstConfig, err)
 			}
 
-			name := fmt.Sprintf("e2e-deps-%s", tt.lang)
+			name := "e2e-deps-" + tt.lang
 
 			port := faasUp(t, binPath, dstFunc, name)
 			defer faasDown(t, binPath, name)

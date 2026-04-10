@@ -175,3 +175,5 @@ func (d *Docker) resolvePort(ctx context.Context, containerID string) (int, erro
 	}
 	return port, nil
 }
+
+var _ Runtime = (*Docker)(nil) //nolint:gochecknoglobals // compile-time interface check

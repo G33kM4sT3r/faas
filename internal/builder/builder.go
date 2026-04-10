@@ -3,9 +3,12 @@ package builder
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/G33kM4sT3r/faas/internal/config"
@@ -23,7 +26,7 @@ func ImageTag(name string) string {
 	h := sha256.New()
 	h.Write([]byte(name))
 	_, _ = fmt.Fprintf(h, "%d", os.Getpid())
-	hash := fmt.Sprintf("%x", h.Sum(nil))[:8]
+	hash := hex.EncodeToString(h.Sum(nil))[:8]
 	return fmt.Sprintf("faas-%s:%s", name, hash)
 }
 
@@ -40,7 +43,7 @@ func PrepareBuildContext(funcDir string, cfg *config.Config, customTemplateDir s
 	}
 
 	funcPath := filepath.Join(funcDir, cfg.Function.Entrypoint)
-	funcContent, err := os.ReadFile(funcPath)
+	funcContent, err := os.ReadFile(funcPath) //nolint:gosec // user-supplied function path is the API contract
 	if err != nil {
 		return BuildContext{}, fmt.Errorf("reading function file: %w", err)
 	}
@@ -92,12 +95,12 @@ func PrepareBuildContext(funcDir string, cfg *config.Config, customTemplateDir s
 		return BuildContext{}, fmt.Errorf("creating build dir: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(buildDir, "Dockerfile"), []byte(dockerfile), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(buildDir, "Dockerfile"), []byte(dockerfile), 0o600); err != nil {
 		return BuildContext{}, fmt.Errorf("writing Dockerfile: %w", err)
 	}
 
 	wrapperName := wrapperOutputName(cfg.Function.Language)
-	if err := os.WriteFile(filepath.Join(buildDir, wrapperName), []byte(wrapper), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(buildDir, wrapperName), []byte(wrapper), 0o600); err != nil {
 		return BuildContext{}, fmt.Errorf("writing wrapper: %w", err)
 	}
 
@@ -106,11 +109,13 @@ func PrepareBuildContext(funcDir string, cfg *config.Config, customTemplateDir s
 	// PHP: handler.php (avoids duplicate <?php opening tags)
 	switch cfg.Function.Language {
 	case "go":
-		if err := os.WriteFile(filepath.Join(buildDir, "handler.go"), funcContent, 0o644); err != nil {
+		//nolint:gosec // funcContent is taint-tracked from user code; intentional copy into our temp build dir
+		if err := os.WriteFile(filepath.Join(buildDir, "handler.go"), funcContent, 0o600); err != nil {
 			return BuildContext{}, fmt.Errorf("writing handler.go: %w", err)
 		}
 	case "php":
-		if err := os.WriteFile(filepath.Join(buildDir, "handler.php"), funcContent, 0o644); err != nil {
+		//nolint:gosec // funcContent is taint-tracked from user code; intentional copy into our temp build dir
+		if err := os.WriteFile(filepath.Join(buildDir, "handler.php"), funcContent, 0o600); err != nil {
 			return BuildContext{}, fmt.Errorf("writing handler.php: %w", err)
 		}
 	}
@@ -176,13 +181,19 @@ func writePythonRequirements(buildDir string, packages []string) error {
 		}
 	}
 	content := strings.Join(lines, "\n") + "\n"
-	return os.WriteFile(filepath.Join(buildDir, "requirements.txt"), []byte(content), 0o644)
+	return os.WriteFile(filepath.Join(buildDir, "requirements.txt"), []byte(content), 0o600)
 }
 
+// writeGoMod emits a minimal go.mod. Dependency require blocks are NOT
+// emitted here — the Go Dockerfile runs `go get ...` + `go mod tidy` at
+// build time, which both downloads the modules and updates go.mod in-place.
+// See templates/go/Dockerfile.
 func writeGoMod(buildDir string, _ []string) error {
 	var b strings.Builder
-	b.WriteString("module faas-func\n\ngo 1.26\n")
-	return os.WriteFile(filepath.Join(buildDir, "go.mod"), []byte(b.String()), 0o644)
+	b.WriteString("module faas-func\n\ngo ")
+	b.WriteString(goModDirective())
+	b.WriteString("\n")
+	return os.WriteFile(filepath.Join(buildDir, "go.mod"), []byte(b.String()), 0o600)
 }
 
 func writeCargoToml(buildDir string, packages []string) error {
@@ -198,7 +209,7 @@ func writeCargoToml(buildDir string, packages []string) error {
 		}
 		fmt.Fprintf(&b, "%s = %q\n", name, version)
 	}
-	return os.WriteFile(filepath.Join(buildDir, "Cargo.toml"), []byte(b.String()), 0o644)
+	return os.WriteFile(filepath.Join(buildDir, "Cargo.toml"), []byte(b.String()), 0o600)
 }
 
 func writeComposerJSON(buildDir string, packages []string) error {
@@ -211,12 +222,34 @@ func writeComposerJSON(buildDir string, packages []string) error {
 		deps = append(deps, fmt.Sprintf("%q:%q", name, version))
 	}
 	content := fmt.Sprintf(`{"require":{%s}}`, strings.Join(deps, ","))
-	return os.WriteFile(filepath.Join(buildDir, "composer.json"), []byte(content), 0o644)
+	return os.WriteFile(filepath.Join(buildDir, "composer.json"), []byte(content), 0o600)
 }
 
 func writeBunPackageJSON(buildDir string, packages []string) error {
 	pkgJSON := fmt.Sprintf(`{"dependencies":{%s}}`, formatBunDeps(packages))
-	return os.WriteFile(filepath.Join(buildDir, "package.json"), []byte(pkgJSON), 0o644)
+	return os.WriteFile(filepath.Join(buildDir, "package.json"), []byte(pkgJSON), 0o600)
+}
+
+// goVersionRe matches the leading goN.M of a runtime.Version() string,
+// allowing trailing patch/release/devel suffixes (go1.26.2, go1.27rc1,
+// "devel go1.27-abc Tue ..."). Capture groups are major and minor.
+var goVersionRe = regexp.MustCompile(`go(\d+)\.(\d+)`) //nolint:gochecknoglobals // compiled regex constant
+
+// goModDirective returns the Go minor-version string from runtime.Version()
+// suitable for a go.mod `go` directive. Wraps parseGoVersion for testability.
+func goModDirective() string {
+	return parseGoVersion(runtime.Version())
+}
+
+// parseGoVersion extracts the major.minor portion of a Go version string.
+// Robust against release ("go1.26.2"), pre-release ("go1.27rc1"), and devel
+// ("devel go1.27-abcdef ...") forms. Falls back to "1.26" on parse failure.
+func parseGoVersion(v string) string {
+	m := goVersionRe.FindStringSubmatch(v)
+	if len(m) != 3 {
+		return "1.26"
+	}
+	return m[1] + "." + m[2]
 }
 
 // parsePackageVersion splits "pkg@version" into (pkg, version).

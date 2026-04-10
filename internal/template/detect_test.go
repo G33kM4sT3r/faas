@@ -16,6 +16,10 @@ func TestDetect(t *testing.T) {
 		{"handler.js", "javascript", false},
 		{"unknown.lua", "", true},
 		{"noext", "", true},
+		{"handler.GO", "go", false},
+		{"handler.Py", "python", false},
+		{"handler.test.go", "go", false},
+		{"handler.spec.ts", "typescript", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {

@@ -46,6 +46,11 @@ linters:
     # Unused parameters
     - unparam
 
+    # Security & quality
+    - gosec
+    - perfsprint
+    - nilnil
+
   settings:
     nakedret:
       max-func-lines: 0 # disallow all naked returns
@@ -58,6 +63,7 @@ linters:
         - style
       disabled-checks:
         - octalLiteral
+        - unnamedResult # CLAUDE.md mandates no named returns
     revive:
       rules:
         - name: blank-imports
@@ -112,6 +118,17 @@ linters:
       # Tests use unchecked setup calls
       - linters: [errcheck]
         path: _test\.go
+      # Tests are not security-sensitive: file perms, path traversal, subprocess.
+      - linters: [gosec]
+        path: _test\.go
+      # docker.go shells out to the trusted docker binary; G204 is by design
+      # for every call site in this file. Other gosec rules still apply.
+      - linters: [gosec]
+        path: internal/runtime/docker\.go
+        text: "G204"
+      # Other production gosec exclusions (G304 path-traversal, G703 taint
+      # in builder.go) are inline //nolint:gosec annotations at the specific
+      # call sites — keeping them surgical so any new violation surfaces.
     paths:
       - third_party
       - vendor

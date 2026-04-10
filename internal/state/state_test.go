@@ -8,6 +8,31 @@ import (
 	"time"
 )
 
+func TestSaveRestrictivePermissions(t *testing.T) {
+	dir := t.TempDir()
+	s := New(filepath.Join(dir, "sub", "state.json"))
+
+	if err := s.Set(&Function{Name: "x", Status: StatusHealthy}); err != nil {
+		t.Fatal(err)
+	}
+
+	dirInfo, err := os.Stat(filepath.Join(dir, "sub"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dirInfo.Mode().Perm() != 0o700 {
+		t.Errorf("directory perms: got %o, want 0700", dirInfo.Mode().Perm())
+	}
+
+	fileInfo, err := os.Stat(filepath.Join(dir, "sub", "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fileInfo.Mode().Perm() != 0o600 {
+		t.Errorf("file perms: got %o, want 0600", fileInfo.Mode().Perm())
+	}
+}
+
 func TestSaveAndLoad(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
@@ -118,7 +143,7 @@ func TestUpdateStatusNotFound(t *testing.T) {
 func TestLoadCorruptJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
-	if err := os.WriteFile(path, []byte("{invalid json"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("{invalid json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -132,7 +157,7 @@ func TestLoadCorruptJSON(t *testing.T) {
 func TestLoadNullFunctions(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
-	if err := os.WriteFile(path, []byte(`{"functions":null}`), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(`{"functions":null}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

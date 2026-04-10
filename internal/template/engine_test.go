@@ -86,22 +86,22 @@ func TestEngineRenderDockerfileWithRuntimeImage(t *testing.T) {
 func TestEngineCustomTemplateOverride(t *testing.T) {
 	customDir := t.TempDir()
 	langDir := filepath.Join(customDir, "python")
-	if err := os.MkdirAll(langDir, 0o755); err != nil {
+	if err := os.MkdirAll(langDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
 	customTmpl := "CUSTOM: {{.UserFunction}}"
 	tmplPath := filepath.Join(langDir, "server.py.tmpl")
-	if err := os.WriteFile(tmplPath, []byte(customTmpl), 0o644); err != nil {
+	if err := os.WriteFile(tmplPath, []byte(customTmpl), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	tomlContent := "name = \"python\"\nextensions = [\".py\"]\nport = 8080\nhealth_path = \"/health\"\nbase_image = \"python:3.14-alpine3.23\"\n"
-	if err := os.WriteFile(filepath.Join(langDir, "template.toml"), []byte(tomlContent), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(langDir, "template.toml"), []byte(tomlContent), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(langDir, "Dockerfile"), []byte("FROM {{.BaseImage}}"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(langDir, "Dockerfile"), []byte("FROM {{.BaseImage}}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -161,7 +161,7 @@ func TestLoadMetaInvalidLanguage(t *testing.T) {
 func TestLoadMetaCustomOverride(t *testing.T) {
 	customDir := t.TempDir()
 	langDir := filepath.Join(customDir, "python")
-	if err := os.MkdirAll(langDir, 0o755); err != nil {
+	if err := os.MkdirAll(langDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
@@ -171,7 +171,7 @@ port = 9999
 health_path = "/custom"
 base_image = "custom:latest"
 `
-	if err := os.WriteFile(filepath.Join(langDir, "template.toml"), []byte(tomlContent), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(langDir, "template.toml"), []byte(tomlContent), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -191,10 +191,10 @@ base_image = "custom:latest"
 func TestLoadMetaCustomInvalidTOML(t *testing.T) {
 	customDir := t.TempDir()
 	langDir := filepath.Join(customDir, "python")
-	if err := os.MkdirAll(langDir, 0o755); err != nil {
+	if err := os.MkdirAll(langDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(langDir, "template.toml"), []byte("{bad toml"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(langDir, "template.toml"), []byte("{bad toml"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -332,5 +332,25 @@ func TestFindWrapperFile(t *testing.T) {
 				t.Errorf("expected %q, got %q", tt.expected, result)
 			}
 		})
+	}
+}
+
+func TestRenderTemplateParseError(t *testing.T) {
+	_, err := renderTemplate("{{.Broken", &RenderData{})
+	if err == nil {
+		t.Fatal("expected parse error, got nil")
+	}
+	if !strings.Contains(err.Error(), "parsing template") {
+		t.Errorf("expected 'parsing template' in error, got: %v", err)
+	}
+}
+
+func TestRenderTemplateExecuteError(t *testing.T) {
+	_, err := renderTemplate("{{.Missing}}", &RenderData{})
+	if err == nil {
+		t.Fatal("expected execute error, got nil")
+	}
+	if !strings.Contains(err.Error(), "executing template") {
+		t.Errorf("expected 'executing template' in error, got: %v", err)
 	}
 }

@@ -146,7 +146,7 @@ func (s *Store) load() (stateFile, error) {
 }
 
 func (s *Store) save(sf stateFile) error {
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return fmt.Errorf("creating state directory: %w", err)
 	}
 
@@ -156,7 +156,7 @@ func (s *Store) save(sf stateFile) error {
 	}
 
 	tmpPath := s.path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+	if err := os.WriteFile(tmpPath, data, 0o600); err != nil {
 		return fmt.Errorf("writing state: %w", err)
 	}
 	if err := os.Rename(tmpPath, s.path); err != nil {

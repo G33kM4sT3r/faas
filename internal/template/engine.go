@@ -48,6 +48,7 @@ func NewEngine(customDir string) (*Engine, error) {
 func (e *Engine) LoadMeta(language string) (Meta, error) {
 	if e.customDir != "" {
 		metaPath := filepath.Join(e.customDir, language, "template.toml")
+		//nolint:gosec // path is composed under the user's own ~/.faas/templates root
 		if data, err := os.ReadFile(metaPath); err == nil {
 			var meta Meta
 			if err := toml.Unmarshal(data, &meta); err != nil {
@@ -100,6 +101,7 @@ func (e *Engine) readTemplateFile(language, kind string) (string, error) {
 
 	if e.customDir != "" {
 		path := filepath.Join(e.customDir, language, filename)
+		//nolint:gosec // path is composed under the user's own ~/.faas/templates root
 		if data, err := os.ReadFile(path); err == nil {
 			return string(data), nil
 		}

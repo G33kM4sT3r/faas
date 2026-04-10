@@ -4,6 +4,8 @@ package logs
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/G33kM4sT3r/faas/internal/ui"
@@ -16,6 +18,8 @@ var levelPriority = map[string]int{ //nolint:gochecknoglobals // immutable looku
 	"error": 3,
 }
 
+// logEntry is the fixed-shape decode target used by FilterByLevel.
+// FormatLine decodes into a map[string]any to surface arbitrary user fields.
 type logEntry struct {
 	Level      string `json:"level"`
 	Msg        string `json:"msg"`
@@ -25,30 +29,59 @@ type logEntry struct {
 	Time       string `json:"time"`
 }
 
-// FormatLine parses a JSON log line and returns a styled string.
-// Falls back to plain text if not valid JSON.
+// FormatLine parses a JSON log line and returns a styled string of the form
+// "HH:MM:SS LEVEL msg [k=v ...]". Falls back to the raw line if not JSON.
+// Known structural fields (level/msg/time/method/path/duration_ms) are
+// rendered specially; any other fields are appended as `key=value` tails in
+// sorted order for deterministic output.
 func FormatLine(line string) string {
-	var entry logEntry
-	if err := json.Unmarshal([]byte(line), &entry); err != nil {
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(line), &raw); err != nil {
 		return line
 	}
 
-	ts := entry.Time
+	level, _ := raw["level"].(string)
+	msg, _ := raw["msg"].(string)
+	ts, _ := raw["time"].(string)
+	method, _ := raw["method"].(string)
+	path, _ := raw["path"].(string)
+	var durationMS int
+	if d, ok := raw["duration_ms"].(float64); ok {
+		durationMS = int(d)
+	}
+
 	if ts == "" {
 		ts = time.Now().Format("15:04:05")
 	}
 
-	levelStr := formatLevel(entry.Level)
-
-	msg := entry.Msg
-	if entry.Method != "" {
-		msg = fmt.Sprintf("%s %s", entry.Method, entry.Path)
-		if entry.DurationMS > 0 {
-			msg += fmt.Sprintf(" %dms", entry.DurationMS)
+	display := msg
+	if method != "" {
+		display = method + " " + path
+		if durationMS > 0 {
+			display += fmt.Sprintf(" %dms", durationMS)
 		}
 	}
 
-	return fmt.Sprintf("%s %s  %s", ui.StyleDim.Render(ts), levelStr, msg)
+	known := map[string]struct{}{
+		"level": {}, "msg": {}, "time": {},
+		"method": {}, "path": {}, "duration_ms": {},
+	}
+	keys := make([]string, 0, len(raw))
+	for k := range raw {
+		if _, skip := known[k]; skip {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var extras strings.Builder
+	for _, k := range keys {
+		fmt.Fprintf(&extras, " %s=%v", k, raw[k])
+	}
+
+	return fmt.Sprintf("%s %s  %s%s",
+		ui.StyleDim.Render(ts), formatLevel(level), display, extras.String())
 }
 
 // FilterByLevel returns only lines at or above the given level.

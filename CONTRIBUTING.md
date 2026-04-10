@@ -31,15 +31,20 @@ make check                    # fmt-check + vet + lint + compile audit
 make test                     # All tests with race detection
 ```
 
-### Running Tests
+### Make targets
 
 ```bash
-make test                     # All tests with race detection
-make test-coverage            # Generate coverage report
-make check                    # Format check + vet + lint + compile audit
+make build                    # Production binary
+make test                     # Fast unit tests with race detection (no Docker required)
+make e2e                      # End-to-end tests (requires Docker)
+make test-coverage            # Generate HTML coverage report
+make check                    # fmt + vet + lint + compile audit
+make vuln                     # govulncheck
+make ci                       # Full CI suite locally (check + test + vuln)
+make fmt                      # Auto-format Go files
 ```
 
-E2E tests require Docker and exercise the full lifecycle (up → ls → invoke → down) for all supported languages.
+E2E tests are gated behind the `e2e` build tag and live in `test/e2e/`. They exercise the full lifecycle (up → ls → invoke → down) for all supported languages and require a working Docker daemon.
 
 ## Architecture
 

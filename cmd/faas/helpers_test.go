@@ -123,7 +123,7 @@ func TestResolveEnvVarsEmpty(t *testing.T) {
 func TestResolveFuncPathFile(t *testing.T) {
 	dir := t.TempDir()
 	funcFile := dir + "/hello.py"
-	if err := os.WriteFile(funcFile, []byte("pass"), 0o644); err != nil {
+	if err := os.WriteFile(funcFile, []byte("pass"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
