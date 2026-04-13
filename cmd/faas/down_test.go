@@ -177,6 +177,33 @@ func TestRunDownAllAggregatesErrors(t *testing.T) {
 	}
 }
 
+// TestRunDownAllRejectsExtraArg is the regression test for the audit fix:
+// `down --all foo` used to silently ignore "foo" and tear down everything.
+// Now it errors so the user understands the args were misread.
+func TestRunDownAllRejectsExtraArg(t *testing.T) {
+	setupCmdEnv(t)
+	seedFunction(t, "keep", "id-keep", "img-keep", 5500)
+	defer withFakeRuntime(t, &fakeRuntime{})()
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+
+	downAll = true
+	t.Cleanup(func() { downAll = false })
+
+	err := runDown(cmd, []string{"someName"})
+	if err == nil {
+		t.Fatal("expected --all + arg combination to error")
+	}
+	if !strings.Contains(err.Error(), "--all does not take a function name") {
+		t.Errorf("unexpected error text: %v", err)
+	}
+	// State must be untouched.
+	if _, err := store.Get("keep"); err != nil {
+		t.Errorf("state should be intact when --all is rejected; got: %v", err)
+	}
+}
+
 func TestRunDownNoArgsNoAll(t *testing.T) {
 	setupCmdEnv(t)
 	defer withFakeRuntime(t, &fakeRuntime{})()

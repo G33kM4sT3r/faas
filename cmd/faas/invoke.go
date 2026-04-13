@@ -54,12 +54,14 @@ func runInvoke(cmd *cobra.Command, args []string) error {
 	case invokeData == "":
 		body = nil
 	case strings.HasPrefix(invokeData, "@"):
-		f, err := os.Open(invokeData[1:]) //nolint:gosec // user-supplied data file is intended
+		// Read into memory so http.NewRequest can auto-set Content-Length;
+		// streaming an *os.File falls back to chunked Transfer-Encoding,
+		// which the minimal language wrappers don't handle.
+		data, err := os.ReadFile(invokeData[1:]) //nolint:gosec // user-supplied data file is intended
 		if err != nil {
-			return fmt.Errorf("opening data file: %w", err)
+			return fmt.Errorf("reading data file: %w", err)
 		}
-		defer func() { _ = f.Close() }()
-		body = f
+		body = bytes.NewReader(data)
 	default:
 		body = strings.NewReader(invokeData)
 	}

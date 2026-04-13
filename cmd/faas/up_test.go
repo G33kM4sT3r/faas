@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/G33kM4sT3r/faas/internal/config"
 	"github.com/G33kM4sT3r/faas/internal/runtime"
 	"github.com/G33kM4sT3r/faas/internal/state"
 )
@@ -110,6 +111,74 @@ func TestDoUpRefusesAlreadyRunningWithoutForce(t *testing.T) {
 	}
 	if len(fake.StopCalls)+len(fake.RemoveCalls) != 0 {
 		t.Errorf("no docker calls expected on refusal; got Stop=%v Remove=%v", fake.StopCalls, fake.RemoveCalls)
+	}
+}
+
+// TestApplyEnvOverridesRejectsMalformed is the regression test for the audit
+// fix: --env values without `=` used to be silently dropped, masking typos.
+func TestApplyEnvOverridesRejectsMalformed(t *testing.T) {
+	cases := []struct {
+		name string
+		envs []string
+		want string
+	}{
+		{"missing equals", []string{"NOEQ"}, "want KEY=VALUE"},
+		{"empty key", []string{"=val"}, "key is empty"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.Config{}
+			err := applyEnvOverrides(&cfg, tc.envs)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("expected error containing %q, got: %v", tc.want, err)
+			}
+		})
+	}
+}
+
+func TestApplyEnvOverridesAccepts(t *testing.T) {
+	cfg := config.Config{}
+	if err := applyEnvOverrides(&cfg, []string{"FOO=bar", "EMPTY="}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Env["FOO"] != "bar" {
+		t.Errorf("expected FOO=bar, got %q", cfg.Env["FOO"])
+	}
+	if v, ok := cfg.Env["EMPTY"]; !ok || v != "" {
+		t.Errorf("expected EMPTY to be present and empty, got %q (ok=%v)", v, ok)
+	}
+}
+
+// TestDoUpForceSurfacesTearDownError is the regression test for the audit
+// fix: when force=true and tearing down the existing function fails, the
+// error must surface — otherwise the next `docker run --name faas-X` fails
+// with a confusing "name already in use" error.
+func TestDoUpForceSurfacesTearDownError(t *testing.T) {
+	tmp := setupCmdEnv(t)
+	handlerPath := writeHandlerFile(t, filepath.Join(tmp, "func"))
+	seedFunction(t, "handler", "stuck-id", "stuck-img", 5302)
+
+	fake := &fakeRuntime{
+		// Force the Remove step to fail so tearDown returns a non-nil error.
+		RemoveFn: func(ctx context.Context, id string) error {
+			return errors.New("docker rm failed: stuck")
+		},
+	}
+	defer withFakeRuntime(t, fake)()
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+
+	err := doUp(cmd, []string{handlerPath}, true)
+	if err == nil {
+		t.Fatal("expected force redeploy to surface tearDown error, got nil")
+	}
+	if !strings.Contains(err.Error(), "tear down") {
+		t.Errorf("expected error to mention tear down, got: %v", err)
+	}
+	// State must be retained so the user can investigate / retry.
+	if _, err := store.Get("handler"); err != nil {
+		t.Errorf("state should be retained when teardown fails; got: %v", err)
 	}
 }
 

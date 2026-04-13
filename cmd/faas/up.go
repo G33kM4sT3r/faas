@@ -36,11 +36,17 @@ var upCmd = &cobra.Command{ //nolint:gochecknoglobals // cobra command
 }
 
 func setupUpFlags() {
-	upCmd.Flags().IntVarP(&upPort, "port", "p", 0, "host port (0 = auto-assign)")
-	upCmd.Flags().StringVarP(&upName, "name", "n", "", "override function name")
-	upCmd.Flags().StringSliceVarP(&upEnvs, "env", "e", nil, "set env var KEY=VALUE")
-	upCmd.Flags().BoolVar(&upForce, "force", false, "redeploy if already running")
-	upCmd.Flags().BoolVar(&upNoCache, "no-cache", false, "force Docker rebuild")
+	addUpFlags(upCmd)
+}
+
+// addUpFlags attaches the deploy-time flags to a command. Used by both
+// `faas up` and `faas dev` so the dev wrapper accepts the same overrides.
+func addUpFlags(cmd *cobra.Command) {
+	cmd.Flags().IntVarP(&upPort, "port", "p", 0, "host port (0 = auto-assign)")
+	cmd.Flags().StringVarP(&upName, "name", "n", "", "override function name")
+	cmd.Flags().StringSliceVarP(&upEnvs, "env", "e", nil, "set env var KEY=VALUE")
+	cmd.Flags().BoolVar(&upForce, "force", false, "redeploy if already running")
+	cmd.Flags().BoolVar(&upNoCache, "no-cache", false, "force Docker rebuild")
 }
 
 func runUp(cmd *cobra.Command, args []string) error {
@@ -74,7 +80,9 @@ func doUp(cmd *cobra.Command, args []string, force bool) error {
 	if upPort > 0 {
 		cfg.Runtime.Port = upPort
 	}
-	applyEnvOverrides(&cfg, upEnvs)
+	if err := applyEnvOverrides(&cfg, upEnvs); err != nil {
+		return err
+	}
 
 	if existing, err := store.Get(cfg.Function.Name); err == nil {
 		if !force {
@@ -84,8 +92,11 @@ func doUp(cmd *cobra.Command, args []string, force bool) error {
 				fmt.Sprintf("to force redeploy: faas up %s --force", funcPath),
 			)
 		}
+		// On force redeploy we must surface teardown failures: the next
+		// docker run uses the same `faas-<name>` container name and would
+		// otherwise fail with a confusing "name already in use" error.
 		if err := tearDown(ctx, &existing); err != nil {
-			logger.Warn().Err(err).Msg("failed to tear down existing function")
+			return ui.Wrapf(fmt.Sprintf("failed to tear down existing %q before redeploy", cfg.Function.Name), err)
 		}
 	}
 
@@ -198,16 +209,21 @@ func loadOrGenerateConfig(configPath, entrypoint, lang string) (config.Config, e
 	return config.Load(configPath)
 }
 
-func applyEnvOverrides(cfg *config.Config, envs []string) {
+func applyEnvOverrides(cfg *config.Config, envs []string) error {
 	if cfg.Env == nil {
 		cfg.Env = make(map[string]string)
 	}
 	for _, env := range envs {
 		k, v, ok := strings.Cut(env, "=")
-		if ok {
-			cfg.Env[k] = v
+		if !ok {
+			return ui.Errorf(fmt.Sprintf("malformed --env %q (want KEY=VALUE)", env))
 		}
+		if k == "" {
+			return ui.Errorf(fmt.Sprintf("malformed --env %q (key is empty)", env))
+		}
+		cfg.Env[k] = v
 	}
+	return nil
 }
 
 func resolveEnvVars(env map[string]string) map[string]string {

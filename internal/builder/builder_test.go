@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -433,6 +434,61 @@ func TestWritePythonRequirements(t *testing.T) {
 				t.Errorf("expected %q, got %q", tt.expected, string(data))
 			}
 		})
+	}
+}
+
+// TestWriteComposerJSONIsValidJSON is the regression test for the audit fix:
+// composer.json was built with fmt.Sprintf("%q:%q",...) which is *almost*
+// JSON but not quite — Go's %q can emit \xNN escapes that JSON parsers
+// reject. Switching to encoding/json.Marshal for value escaping ensures the
+// output always parses as JSON, even with constraint specs that contain
+// unusual characters (^, ~, |, spaces, etc).
+func TestWriteComposerJSONIsValidJSON(t *testing.T) {
+	dir := t.TempDir()
+	// Constraint specs commonly include `^`, `~`, `|`, `>=`, spaces.
+	pkgs := []string{
+		"vendor/pkg-a@^7.0|^8.0",
+		"vendor/pkg-b@>=1.0 <2.0",
+		"vendor/pkg-c@~3.4",
+	}
+	if err := writeComposerJSON(dir, pkgs); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "composer.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parsed map[string]map[string]string
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("composer.json must be valid JSON: %v\nraw: %s", err, data)
+	}
+	if got := parsed["require"]["vendor/pkg-a"]; got != "^7.0|^8.0" {
+		t.Errorf("vendor/pkg-a constraint: got %q, want %q", got, "^7.0|^8.0")
+	}
+	if got := parsed["require"]["vendor/pkg-b"]; got != ">=1.0 <2.0" {
+		t.Errorf("vendor/pkg-b constraint: got %q, want %q", got, ">=1.0 <2.0")
+	}
+}
+
+func TestWriteBunPackageJSONIsValidJSON(t *testing.T) {
+	dir := t.TempDir()
+	pkgs := []string{
+		"a-pkg@>=1.0.0 <2.0.0",
+		"@scope/pkg@^7.0|^8.0",
+	}
+	if err := writeBunPackageJSON(dir, pkgs); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "package.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parsed map[string]map[string]string
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("package.json must be valid JSON: %v\nraw: %s", err, data)
+	}
+	if got := parsed["dependencies"]["@scope/pkg"]; got != "^7.0|^8.0" {
+		t.Errorf("@scope/pkg constraint: got %q, want %q", got, "^7.0|^8.0")
 	}
 }
 

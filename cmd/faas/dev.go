@@ -22,6 +22,10 @@ var devCmd = &cobra.Command{ //nolint:gochecknoglobals // cobra command
 	RunE:  runDev,
 }
 
+func setupDevFlags() {
+	addUpFlags(devCmd)
+}
+
 func runDev(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()

@@ -40,6 +40,9 @@ func runDown(cmd *cobra.Command, args []string) error {
 	}
 
 	if downAll {
+		if len(args) > 0 {
+			return ui.Errorf("--all does not take a function name", "drop the argument or omit --all")
+		}
 		fns, err := store.List()
 		if err != nil {
 			return err

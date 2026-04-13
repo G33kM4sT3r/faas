@@ -4,6 +4,7 @@ package builder
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,6 +15,14 @@ import (
 	"github.com/G33kM4sT3r/faas/internal/config"
 	"github.com/G33kM4sT3r/faas/internal/template"
 )
+
+// jsonString escapes s into a JSON string literal (including surrounding
+// quotes). Used to build composer.json / package.json by hand so we can
+// preserve insertion order while still emitting valid JSON for any input.
+func jsonString(s string) string {
+	b, _ := json.Marshal(s) //nolint:errchkjson // string marshal cannot fail
+	return string(b)
+}
 
 // BuildContext contains the prepared build directory and metadata.
 type BuildContext struct {
@@ -219,9 +228,9 @@ func writeComposerJSON(buildDir string, packages []string) error {
 		if version == "" {
 			version = "*"
 		}
-		deps = append(deps, fmt.Sprintf("%q:%q", name, version))
+		deps = append(deps, jsonString(name)+":"+jsonString(version))
 	}
-	content := fmt.Sprintf(`{"require":{%s}}`, strings.Join(deps, ","))
+	content := `{"require":{` + strings.Join(deps, ",") + `}}`
 	return os.WriteFile(filepath.Join(buildDir, "composer.json"), []byte(content), 0o600)
 }
 
@@ -276,7 +285,7 @@ func formatBunDeps(packages []string) string {
 		if version == "" {
 			version = "*"
 		}
-		deps = append(deps, fmt.Sprintf("%q:%q", name, version))
+		deps = append(deps, jsonString(name)+":"+jsonString(version))
 	}
 	return strings.Join(deps, ",")
 }

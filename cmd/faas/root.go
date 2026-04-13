@@ -49,6 +49,7 @@ func Execute(version, commit string) error {
 	setupLsFlags()
 	setupLogsFlags()
 	setupInvokeFlags()
+	setupDevFlags()
 
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(upCmd)

@@ -11,6 +11,7 @@ func TestSetupFlagsRegistersExpectedNames(t *testing.T) {
 	setupLsFlags()
 	setupLogsFlags()
 	setupInvokeFlags()
+	setupDevFlags()
 
 	cases := []struct {
 		cmdName string
@@ -21,6 +22,9 @@ func TestSetupFlagsRegistersExpectedNames(t *testing.T) {
 		{"ls", []string{"json", "quiet"}},
 		{"logs", []string{"follow", "no-follow", "lines", "json", "level"}},
 		{"invoke", []string{"method", "data", "header", "path"}},
+		// dev wraps up — must expose the same deploy-time flags so the user
+		// can pick port/name/env/force/no-cache without dropping into config.toml.
+		{"dev", []string{"port", "name", "env", "force", "no-cache"}},
 	}
 
 	for _, c := range cases {
@@ -35,6 +39,8 @@ func TestSetupFlagsRegistersExpectedNames(t *testing.T) {
 				cmd = logsCmd
 			case "invoke":
 				cmd = invokeCmd
+			case "dev":
+				cmd = devCmd
 			}
 			for _, f := range c.flags {
 				if cmd.Flags().Lookup(f) == nil {
