@@ -39,7 +39,11 @@ func WaitForHealthy(ctx context.Context, url string, opts Options) error {
 			if err != nil {
 				continue
 			}
-			resp, err := client.Do(req)
+			// gosec G704: URL is the local container's health endpoint
+			// (http://localhost:<port>/health), constructed by the caller from
+			// runtime-resolved state — not user web input. No SSRF surface.
+			resp, err := client.Do(req) //nolint:gosec // local health probe, not external SSRF
+
 			if err != nil {
 				continue
 			}

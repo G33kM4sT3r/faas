@@ -89,7 +89,10 @@ func invokeURL(ctx context.Context, url, method string, body io.Reader, out io.W
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	// gosec G704: URL targets the user's own deployed function on
+	// http://localhost:<port>; the user is the principal here, no SSRF surface.
+	resp, err := client.Do(req) //nolint:gosec // local invoke against user's own function, not external SSRF
+
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
@@ -105,7 +108,8 @@ func invokeURL(ctx context.Context, url, method string, body io.Reader, out io.W
 		raw = raw[:maxInvokeResponseBytes]
 	}
 
-	_, _ = fmt.Fprintf(out, "%s %d %s\n", ui.SymbolSuccess, resp.StatusCode, resp.Status)
+	// gosec G705: writing to the CLI's stdout, not generating HTML — no XSS surface.
+	_, _ = fmt.Fprintf(out, "%s %d %s\n", ui.SymbolSuccess, resp.StatusCode, resp.Status) //nolint:gosec // CLI stdout, not HTML output
 	if truncated {
 		_, _ = fmt.Fprintf(out, "%s response truncated at %d bytes\n", ui.SymbolWarning, maxInvokeResponseBytes)
 	}
